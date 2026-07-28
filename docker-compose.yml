@@ -1,0 +1,42 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: app_review_intelligence
+      POSTGRES_USER: app_review
+      POSTGRES_PASSWORD: app_review
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_review -d app_review_intelligence"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    working_dir: /app
+    environment:
+      APP_NAME: App Review Intelligence API
+      APP_ENVIRONMENT: development
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      APP_RELOAD: "true"
+      APP_DATABASE_URL: postgresql+psycopg://app_review:app_review@db:5432/app_review_intelligence
+      APP_DATABASE_ECHO: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  db_data:

@@ -36,9 +36,65 @@ The planned web application will help product, research, and insight teams:
 
 ## Project Status
 
-**Status: Planning**
+**Status: Initial backend scaffold**
 
-The repository currently contains the product and technical plan. Implementation has not yet begun.
+The repository contains the product and technical plan, plus an initial FastAPI backend and local PostgreSQL/pgvector development environment (configuration, database session management, and health endpoints only). Review analysis, semantic search, embeddings, ingestion, and the frontend are not implemented yet.
+
+## Development
+
+Requires Docker and Docker Compose for the full local stack, or Python 3.12 to run the backend directly.
+
+Copy the example environment file:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Start the local stack (PostgreSQL with pgvector, and the API):
+
+```bash
+docker compose up --build
+```
+
+Open the interactive API documentation:
+
+```
+http://localhost:8000/docs
+```
+
+Check application health (no database dependency):
+
+```bash
+curl http://localhost:8000/health
+```
+
+Check database health:
+
+```bash
+curl http://localhost:8000/health/db
+```
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+To work on the backend outside Docker, install it in a virtual environment (Python 3.12):
+
+```bash
+cd backend
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Run the backend test suite:
+
+```bash
+cd backend
+pytest
+```
 
 ## Documentation
 
