@@ -28,3 +28,6 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: requires a running PostgreSQL instance; skipped when unavailable",
+]

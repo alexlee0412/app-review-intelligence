@@ -36,9 +36,9 @@ The planned web application will help product, research, and insight teams:
 
 ## Project Status
 
-**Status: Initial backend scaffold**
+**Status: Core data model**
 
-The repository contains the product and technical plan, plus an initial FastAPI backend and local PostgreSQL/pgvector development environment (configuration, database session management, and health endpoints only). Review analysis, semantic search, embeddings, ingestion, and the frontend are not implemented yet.
+The repository contains the product and technical plan, an initial FastAPI backend with a local PostgreSQL/pgvector development environment (configuration, database session management, and health endpoints), and the core relational data model — the `apps`, `reviews`, and `query_runs` tables, defined as both SQLAlchemy models and a SQL bootstrap schema. Review ingestion, embedding generation, semantic search, analytics, and the frontend are not implemented yet.
 
 ## Development
 
@@ -95,6 +95,8 @@ Run the backend test suite:
 cd backend
 pytest
 ```
+
+Database-backed tests are skipped automatically when PostgreSQL is not running.
 
 ## Documentation
 
