@@ -1,0 +1,95 @@
+"""Configuration tests for credential redaction and deployment posture."""
+
+from __future__ import annotations
+
+import pytest
+from pydantic import SecretStr, ValidationError
+
+from app.core.config import Settings
+from app.models.review import EMBEDDING_DIMENSION
+
+REMOTE_DATABASE_URL = "postgresql+psycopg://example:placeholder@db.example.invalid/app"
+BASE_SETTINGS = {
+    "app_host": "example.invalid",
+    "app_port": 9999,
+}
+
+
+def test_embedding_dimension_agrees_with_model() -> None:
+    settings = Settings(
+        _env_file=None, database_url=REMOTE_DATABASE_URL, **BASE_SETTINGS
+    )
+    assert settings.embedding_dimension == EMBEDDING_DIMENSION
+
+
+def test_embedding_dimension_mismatch_raises() -> None:
+    with pytest.raises(ValidationError, match="must be 1536"):
+        Settings(
+            _env_file=None,
+            database_url=REMOTE_DATABASE_URL,
+            embedding_dimension=12,
+            **BASE_SETTINGS,
+        )
+
+
+def test_secret_fields_are_redacted_in_string_representations() -> None:
+    apify_secret = "private-apify-placeholder"
+    openai_secret = "private-openai-placeholder"
+    settings = Settings(
+        _env_file=None,
+        database_url=REMOTE_DATABASE_URL,
+        apify_api_token=SecretStr(apify_secret),
+        openai_api_key=SecretStr(openai_secret),
+        **BASE_SETTINGS,
+    )
+    for rendered in (repr(settings), str(settings)):
+        assert apify_secret not in rendered
+        assert openai_secret not in rendered
+
+
+def test_production_rejects_fake_provider_without_leaking_inputs() -> None:
+    password = "private-password-placeholder"
+    token = "private-token-placeholder"
+    dsn = f"postgresql+psycopg://user:{password}@db.example.invalid/app"
+    with pytest.raises(ValidationError) as caught:
+        Settings(
+            _env_file=None,
+            app_environment="production",
+            database_url=dsn,
+            embedding_provider="fake",
+            apify_api_token=SecretStr(token),
+            **BASE_SETTINGS,
+        )
+    message = str(caught.value)
+    assert "production-grade provider" in message
+    assert password not in message
+    assert token not in message
+    assert dsn not in message
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
+def test_production_rejects_local_database_without_leaking_dsn(host: str) -> None:
+    password = "private-password-placeholder"
+    dsn = f"postgresql+psycopg://user:{password}@{host}:9999/app"
+    with pytest.raises(ValidationError) as caught:
+        Settings(
+            _env_file=None,
+            app_environment="production",
+            database_url=dsn,
+            embedding_provider="openai",
+            **BASE_SETTINGS,
+        )
+    message = str(caught.value)
+    assert "remotely reachable database host" in message
+    assert password not in message
+    assert dsn not in message
+
+
+def test_unknown_embedding_provider_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="either 'fake' or 'openai'"):
+        Settings(
+            _env_file=None,
+            database_url=REMOTE_DATABASE_URL,
+            embedding_provider="unknown",
+            **BASE_SETTINGS,
+        )

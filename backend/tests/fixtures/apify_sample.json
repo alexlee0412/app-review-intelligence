@@ -1,0 +1,111 @@
+[
+  {
+    "id": "fixture-r1",
+    "appId": "fixture-app-a",
+    "appName": "Fixture App A",
+    "score": 1,
+    "country": "us",
+    "date": "2026-01-05T12:00:00Z",
+    "title": "Cannot cancel",
+    "text": "The cancellation control is hard to find.",
+    "version": "3.2.1"
+  },
+  {
+    "id": "fixture-r2",
+    "appId": "fixture-app-a",
+    "appName": "Fixture App A",
+    "score": "2",
+    "country": "GB",
+    "date": "2026-01-06T12:00:00+00:00",
+    "title": "Slow",
+    "text": "The app is slow after the update."
+  },
+  {
+    "id": "fixture-r2",
+    "appId": "fixture-app-a",
+    "appName": "Fixture App A",
+    "score": "2",
+    "country": "GB",
+    "date": "2026-01-06T12:00:00+00:00",
+    "title": "Slow",
+    "text": "The app is slow after the update."
+  },
+  {
+    "id": "fixture-bad-rating",
+    "appId": "fixture-app-a",
+    "score": 7,
+    "country": "US",
+    "date": "2026-01-07T12:00:00Z",
+    "text": "Invalid rating."
+  },
+  {
+    "id": "fixture-bad-country",
+    "appId": "fixture-app-a",
+    "score": 3,
+    "country": "USA",
+    "date": "2026-01-07T12:00:00Z",
+    "text": "Invalid country."
+  },
+  {
+    "id": "fixture-bad-date",
+    "appId": "fixture-app-a",
+    "score": 3,
+    "country": "US",
+    "date": "not-a-date",
+    "text": "Invalid date."
+  },
+  {
+    "id": "fixture-empty-body",
+    "appId": "fixture-app-a",
+    "score": 3,
+    "country": "US",
+    "date": "2026-01-07T12:00:00Z",
+    "text": "  \r\n  "
+  },
+  {
+    "id": "fixture-missing-app",
+    "score": 3,
+    "country": "US",
+    "date": "2026-01-07T12:00:00Z",
+    "text": "No application identifier."
+  },
+  {
+    "id": "fixture-r9",
+    "appId": "fixture-app-a",
+    "appName": "Fixture App A",
+    "score": 4,
+    "country": "CA",
+    "date": "2026-01-08T12:00:00Z",
+    "text": "Works well for me.",
+    "userName": "sample-private-name"
+  },
+  {
+    "review_id": "fixture-r10",
+    "bundleId": "fixture-app-b",
+    "app_name": "Fixture App B",
+    "stars": 5,
+    "region": "kr",
+    "updated": "2026-01-09T21:00:00+09:00",
+    "reviewTitle": "Useful",
+    "body": "A useful alternate-alias record.",
+    "appVersion": "123456789012345678901234567890123456"
+  },
+  {
+    "appId": "fixture-app-b",
+    "appName": "Fixture App B",
+    "rating": 3,
+    "countryCode": "DE",
+    "createdAt": "2026-01-10T12:00:00",
+    "content": "This record uses a deterministic fallback identifier."
+  },
+  {
+    "reviewId": "fixture-r12",
+    "app_id": "fixture-app-b",
+    "appName": "Fixture App B",
+    "rating": 4,
+    "countryCode": "FR",
+    "at": "2026-01-11T12:00:00Z",
+    "review": "A final valid review.",
+    "reviewCreatedVersion": "4.0"
+  }
+]
