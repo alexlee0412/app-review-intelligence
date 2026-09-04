@@ -12,3 +12,6 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# Local agent/orchestration tooling and scratch state
+.agent-local/
