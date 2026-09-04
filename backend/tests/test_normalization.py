@@ -233,3 +233,25 @@ def test_one_bad_record_does_not_abort_the_run() -> None:
     assert result.read_count == 2
     assert result.normalized_count == 1
     assert result.rejected_count == 1
+
+
+def test_rejected_raw_excludes_pii_fields() -> None:
+    raw = valid_record()
+    raw.update(
+        {
+            "score": 9,
+            "userName": "private-name",
+            "userUrl": "private-user-url",
+            "reviewerId": "private-reviewer-id",
+            "avatar": "private-avatar-url",
+            "avatarUrl": "private-avatar-url",
+        }
+    )
+    reject = normalize_records([raw], source="src").rejects[0]
+    assert {
+        "userName",
+        "userUrl",
+        "reviewerId",
+        "avatar",
+        "avatarUrl",
+    }.isdisjoint(reject.raw)

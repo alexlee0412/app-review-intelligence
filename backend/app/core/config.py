@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         hide_input_in_errors=True,
+        populate_by_name=True,
     )
 
     app_name: str = Field(
@@ -35,8 +36,8 @@ class Settings(BaseSettings):
         default="development",
         validation_alias="APP_ENVIRONMENT",
     )
-    app_host: str = Field(validation_alias="APP_HOST")
-    app_port: int = Field(validation_alias="APP_PORT")
+    app_host: str = Field(default="0.0.0.0", validation_alias="APP_HOST")
+    app_port: int = Field(default=8000, validation_alias="APP_PORT")
     app_reload: bool = Field(default=True, validation_alias="APP_RELOAD")
 
     # These use the default env_prefix + field-name convention, resolving
@@ -69,6 +70,11 @@ class Settings(BaseSettings):
             if self.embedding_provider == "fake":
                 raise ValueError(
                     "APP_EMBEDDING_PROVIDER must select a production-grade provider "
+                    "outside development and test"
+                )
+            if self.embedding_provider == "openai" and self.openai_api_key is None:
+                raise ValueError(
+                    "APP_OPENAI_API_KEY is required when APP_EMBEDDING_PROVIDER=openai "
                     "outside development and test"
                 )
 

@@ -26,6 +26,19 @@ CREATED_AT_ALIASES = ("date", "at", "createdAt", "updated")
 TITLE_ALIASES = ("title", "reviewTitle")
 BODY_ALIASES = ("text", "review", "content", "body")
 VERSION_ALIASES = ("version", "reviewCreatedVersion", "appVersion")
+_REJECT_RAW_KEYS = (
+    *EXTERNAL_ID_ALIASES,
+    *APP_ID_ALIASES,
+    *APP_NAME_ALIASES,
+    *RATING_ALIASES,
+    *COUNTRY_ALIASES,
+    *CREATED_AT_ALIASES,
+    *TITLE_ALIASES,
+    *BODY_ALIASES,
+    *VERSION_ALIASES,
+    "category",
+    "platform",
+)
 
 
 class NormalizationError(ValueError):
@@ -48,6 +61,10 @@ def _clean_text(value: Any) -> str:
     if value is None:
         return ""
     return str(value).replace("\r\n", "\n").strip()
+
+
+def _project_reject_raw(raw: dict[str, Any]) -> dict[str, Any]:
+    return {key: raw[key] for key in _REJECT_RAW_KEYS if key in raw}
 
 
 def _parse_rating(value: Any) -> int:
@@ -203,7 +220,7 @@ def normalize_records(
                 RejectedRecord(
                     reason_code=exc.reason_code,
                     message=str(exc),
-                    raw=dict(raw),
+                    raw=_project_reject_raw(raw),
                 )
             )
             continue

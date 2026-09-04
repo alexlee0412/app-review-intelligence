@@ -15,6 +15,9 @@ from app.core.config import Settings
 from app.services.apify_source import fetch_dataset, load_from_file
 from app.services.normalization import normalize_records
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_REJECTS_DIR = Path("data/rejects")
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -30,7 +33,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--rejects-dir",
         type=Path,
-        default=Path("../data/rejects"),
+        default=_DEFAULT_REJECTS_DIR,
         help="Relative directory for timestamped reject JSONL files",
     )
     return parser
@@ -56,6 +59,12 @@ def _write_rejects(rejects_dir: Path, rejects: list[Any]) -> Path | None:
         for reject in rejects:
             handle.write(json.dumps(reject.model_dump(), ensure_ascii=False) + "\n")
     return path
+
+
+def _resolve_rejects_dir(rejects_dir: Path) -> Path:
+    if rejects_dir == _DEFAULT_REJECTS_DIR:
+        return _PROJECT_ROOT / rejects_dir
+    return rejects_dir
 
 
 def _summary(
@@ -96,11 +105,14 @@ def run(args: argparse.Namespace) -> int:
         source=args.source,
         app_id_override=args.app_id,
     )
-    reject_path = _write_rejects(args.rejects_dir, result.rejects)
+    reject_path = None
 
     inserted = 0
     updated = 0
     if not args.dry_run:
+        reject_path = _write_rejects(
+            _resolve_rejects_dir(args.rejects_dir), result.rejects
+        )
         from app.core.db import SessionLocal
         from app.repositories.review_write_repository import (
             upsert_normalized_records,

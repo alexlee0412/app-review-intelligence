@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from pydantic import SecretStr, ValidationError
 
@@ -77,6 +81,7 @@ def test_production_rejects_local_database_without_leaking_dsn(host: str) -> Non
             app_environment="production",
             database_url=dsn,
             embedding_provider="openai",
+            openai_api_key=SecretStr("placeholder-key"),
             **BASE_SETTINGS,
         )
     message = str(caught.value)
@@ -93,3 +98,64 @@ def test_unknown_embedding_provider_is_rejected() -> None:
             embedding_provider="unknown",
             **BASE_SETTINGS,
         )
+
+
+def test_production_openai_requires_key_without_leaking_inputs() -> None:
+    password = "private-password-placeholder"
+    token = "private-token-placeholder"
+    dsn = f"postgresql+psycopg://user:{password}@db.example.invalid/app"
+    with pytest.raises(ValidationError) as caught:
+        Settings(
+            _env_file=None,
+            app_environment="production",
+            database_url=dsn,
+            embedding_provider="openai",
+            apify_api_token=SecretStr(token),
+            **BASE_SETTINGS,
+        )
+    message = str(caught.value)
+    assert "APP_OPENAI_API_KEY" in message
+    assert password not in message
+    assert token not in message
+    assert dsn not in message
+
+
+def test_settings_accept_field_names() -> None:
+    settings = Settings(
+        _env_file=None,
+        app_name="Field Name App",
+        app_environment="test",
+        app_host="field-name.invalid",
+        app_port=4321,
+        app_reload=False,
+        database_url=REMOTE_DATABASE_URL,
+        database_echo=True,
+    )
+    assert Settings.model_config.get("populate_by_name") is True
+    assert settings.app_name == "Field Name App"
+    assert settings.app_host == "field-name.invalid"
+    assert settings.app_port == 4321
+    assert settings.app_reload is False
+    assert settings.database_echo is True
+
+
+def test_host_and_port_have_defaults() -> None:
+    settings = Settings(_env_file=None, database_url=REMOTE_DATABASE_URL)
+    assert settings.app_host == "0.0.0.0"
+    assert settings.app_port == 8000
+
+
+def test_import_main_without_env_file_succeeds(tmp_path: Path) -> None:
+    backend_root = Path(__file__).resolve().parents[1]
+    completed = subprocess.run(
+        [sys.executable, "-c", "import app.main"],
+        cwd=tmp_path,
+        env={
+            "PYTHONPATH": str(backend_root),
+            "APP_DATABASE_URL": REMOTE_DATABASE_URL,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
