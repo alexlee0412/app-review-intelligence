@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.api.health import router as health_router
+from app.api.search import router as search_router
 from app.core.config import get_settings
 
 
@@ -16,6 +17,7 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(health_router)
+    application.include_router(search_router)
 
     return application
 
