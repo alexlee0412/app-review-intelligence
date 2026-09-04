@@ -6,8 +6,18 @@ from pathlib import Path
 import pytest
 
 from app.models import EMBEDDING_DIMENSION, QueryRun
-from app.repositories.review_search_repository import SearchQueryResult
-from app.schemas.search import QueryEmbedder, ReviewEvidence, SearchRequest
+from app.repositories.review_search_repository import (
+    MAX_CANDIDATE_LIMIT,
+    SearchQueryResult,
+    search_review_candidates,
+)
+from app.schemas.search import (
+    MAX_TOP_K,
+    AppliedFilters,
+    QueryEmbedder,
+    ReviewEvidence,
+    SearchRequest,
+)
 from app.services import review_search
 from app.services.review_search import InvalidEmbeddingDimensionError, search_reviews
 
@@ -22,6 +32,20 @@ class FakeSession:
 
     def commit(self) -> None:
         self.commit_count += 1
+
+
+class EmptyResult:
+    def all(self) -> list[object]:
+        return []
+
+
+class CapturingSession:
+    def __init__(self) -> None:
+        self.statement: object | None = None
+
+    def execute(self, statement: object) -> EmptyResult:
+        self.statement = statement
+        return EmptyResult()
 
 
 def _embedder(*, production: bool = True) -> QueryEmbedder:
@@ -208,6 +232,85 @@ def test_production_provider_has_no_quality_warning(
     )
     response = search_reviews(FakeSession(), SearchRequest(query="cancel"), _embedder())
     assert response.warnings == []
+
+
+def test_candidate_limit_preserves_headroom_at_maximum_top_k() -> None:
+    session = CapturingSession()
+
+    search_review_candidates(
+        session=session,  # type: ignore[arg-type]
+        query_vector=[0.0] * EMBEDDING_DIMENSION,
+        filters=AppliedFilters(),
+        top_k=MAX_TOP_K,
+        candidate_multiplier=2,
+    )
+
+    assert session.statement is not None
+    assert session.statement._limit_clause.value == MAX_CANDIDATE_LIMIT  # type: ignore[attr-defined]
+    assert MAX_CANDIDATE_LIMIT == MAX_TOP_K * 2
+
+
+def test_maximum_top_k_is_satisfied_after_deduplication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    candidates = [
+        _evidence(
+            review_id=f"review-{index}-{copy}",
+            body=f"unique body {index}",
+            similarity=1.0 - index / 1000,
+            created_at=now,
+        )
+        for index in range(MAX_TOP_K)
+        for copy in range(2)
+    ]
+    _install_result(
+        monkeypatch,
+        SearchQueryResult(
+            evidence=candidates,
+            matched_review_count=len(candidates),
+            sql_template="SELECT parameterized",
+        ),
+    )
+
+    response = search_reviews(
+        FakeSession(),
+        SearchRequest(query="cancel", top_k=MAX_TOP_K),
+        _embedder(),
+    )
+
+    assert response.returned_count == MAX_TOP_K
+    assert response.warnings == []
+
+
+def test_deduplication_shortfall_is_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    _install_result(
+        monkeypatch,
+        SearchQueryResult(
+            evidence=[
+                _evidence(
+                    f"review-{index}",
+                    f"same body{'!' * index}",
+                    0.9 - index / 100,
+                    now,
+                )
+                for index in range(10)
+            ],
+            matched_review_count=10,
+            sql_template="SELECT parameterized",
+        ),
+    )
+
+    response = search_reviews(
+        FakeSession(), SearchRequest(query="cancel", top_k=5), _embedder()
+    )
+
+    assert response.returned_count == 1
+    assert len(response.warnings) == 1
+    assert "Returned 1 unique reviews for top_k=5" in response.warnings[0]
 
 
 def test_provider_module_is_only_imported_inside_dependency_function() -> None:

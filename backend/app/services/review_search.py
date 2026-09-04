@@ -140,7 +140,8 @@ def search_reviews(
         top_k=request.top_k,
         candidate_multiplier=CANDIDATE_MULTIPLIER,
     )
-    evidence = _remove_near_duplicates(query_result.evidence)[: request.top_k]
+    deduplicated = _remove_near_duplicates(query_result.evidence)
+    evidence = deduplicated[: request.top_k]
     query_run_id = _persist_query_run(
         session=session,
         request=request,
@@ -155,6 +156,12 @@ def search_reviews(
         warnings.append(
             f"The non-semantic development provider ('{embedder.name}') supplied "
             "these embeddings. Similarity scores and result ordering are NOT meaningful."
+        )
+    if len(deduplicated) < request.top_k <= query_result.matched_review_count:
+        warnings.append(
+            f"Returned {len(deduplicated)} unique reviews for top_k={request.top_k} "
+            f"although {query_result.matched_review_count} reviews matched; "
+            "near-duplicate removal exhausted the candidate window."
         )
 
     return SearchResponse(

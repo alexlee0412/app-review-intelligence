@@ -17,6 +17,8 @@ from app.schemas.search import AppliedFilters
 
 pytestmark = pytest.mark.integration
 
+TEST_APP_IDS = ["search-app-a", "search-app-b"]
+
 
 def _unit_vector(*components: tuple[int, float]) -> list[float]:
     vector = [0.0] * EMBEDDING_DIMENSION
@@ -101,10 +103,13 @@ def seeded_session(session: Session) -> Session:
 
 
 def _search(session: Session, filters: AppliedFilters) -> object:
+    scoped_filters = filters.model_copy(
+        update={"app_ids": filters.app_ids or TEST_APP_IDS}
+    )
     return search_review_candidates(
         session=session,
         query_vector=_unit_vector((0, 1.0)),
-        filters=filters,
+        filters=scoped_filters,
         top_k=20,
         candidate_multiplier=2,
     )
@@ -166,6 +171,7 @@ def test_matched_count_agrees_with_independent_count(seeded_session: Session) ->
         .select_from(Review)
         .where(
             Review.embedding.is_not(None),
+            Review.app_id.in_(TEST_APP_IDS),
             Review.country.in_(filters.countries),
             Review.created_at >= filters.date_from,
             Review.created_at < filters.date_to,

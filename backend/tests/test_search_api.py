@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import logging
+
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_query_embedder
@@ -7,6 +11,7 @@ from app.core.db import get_db
 from app.main import app
 from app.models import EMBEDDING_DIMENSION
 from app.schemas.search import QueryEmbedder
+from app.services.embedding_service import EmbeddingConfigurationError
 
 
 class EmptyResult:
@@ -119,3 +124,43 @@ def test_search_empty_result_has_real_query_run_id(client: TestClient) -> None:
     assert body["returned_count"] == 0
     assert body["query_run_id"]
     assert session.added[0].query_run_id is not None
+
+
+def test_query_embedder_configuration_failure_returns_logged_503(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def fail_build(_: object) -> object:
+        raise EmbeddingConfigurationError("invalid configuration")
+
+    monkeypatch.setattr("app.core.config.get_settings", lambda: object())
+    monkeypatch.setattr(
+        "app.services.embedding_service.build_embedding_provider", fail_build
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.api.deps"):
+        with pytest.raises(HTTPException) as raised:
+            get_query_embedder()
+
+    assert raised.value.status_code == 503
+    assert raised.value.detail == "Query embedding service unavailable"
+    assert [record.message for record in caplog.records] == [
+        "Embedding provider unavailable"
+    ]
+
+
+@pytest.mark.parametrize("error_type", [AttributeError, ImportError])
+def test_query_embedder_programming_errors_propagate(
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
+) -> None:
+    def fail_build(_: object) -> object:
+        raise error_type("unexpected implementation failure")
+
+    monkeypatch.setattr("app.core.config.get_settings", lambda: object())
+    monkeypatch.setattr(
+        "app.services.embedding_service.build_embedding_provider", fail_build
+    )
+
+    with pytest.raises(error_type, match="unexpected implementation failure"):
+        get_query_embedder()

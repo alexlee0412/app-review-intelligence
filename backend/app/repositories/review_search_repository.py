@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.models import EMBEDDING_DIMENSION, App, Review
 from app.schemas.search import AppliedFilters, MAX_TOP_K, ReviewEvidence
 
+MAX_CANDIDATE_LIMIT = MAX_TOP_K * 2
+
 
 @dataclass(frozen=True)
 class SearchQueryResult:
@@ -77,7 +79,7 @@ def search_review_candidates(
     if filters.min_similarity is not None:
         statement = statement.where(distance <= 1.0 - filters.min_similarity)
 
-    candidate_limit = min(top_k * candidate_multiplier, MAX_TOP_K)
+    candidate_limit = min(top_k * candidate_multiplier, MAX_CANDIDATE_LIMIT)
     statement = statement.order_by(
         distance.asc(),
         Review.created_at.desc(),
