@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 128
     openai_api_key: SecretStr | None = None
 
+    # Question interpretation and answer synthesis. These reuse openai_api_key rather
+    # than introducing a second credential.
+    llm_provider: str = "fake"
+    planner_model: str = "gpt-5-mini"
+    synthesizer_model: str = "gpt-5"
+    llm_timeout_seconds: int = 60
+    llm_max_output_tokens: int = 2000
+
     @model_validator(mode="after")
     def validate_embedding_and_production_posture(self) -> "Settings":
         """Reject incompatible embedding settings and unsafe production defaults."""
@@ -66,7 +74,20 @@ class Settings(BaseSettings):
                 "APP_EMBEDDING_PROVIDER must be either 'fake' or 'openai'"
             )
 
+        if self.llm_provider not in {"fake", "openai"}:
+            raise ValueError("APP_LLM_PROVIDER must be either 'fake' or 'openai'")
+
         if self.app_environment.lower() not in {"development", "test"}:
+            # Checked first: pointing production at a local database is the more
+            # fundamental misconfiguration, and reporting it before provider choices
+            # keeps the message actionable.
+            hostname = urlsplit(self.database_url).hostname
+            if hostname is not None and hostname.lower() in {"localhost", "127.0.0.1"}:
+                raise ValueError(
+                    "APP_DATABASE_URL must use a remotely reachable database host "
+                    "outside development and test"
+                )
+
             if self.embedding_provider == "fake":
                 raise ValueError(
                     "APP_EMBEDDING_PROVIDER must select a production-grade provider "
@@ -77,11 +98,16 @@ class Settings(BaseSettings):
                     "APP_OPENAI_API_KEY is required when APP_EMBEDDING_PROVIDER=openai "
                     "outside development and test"
                 )
-
-            hostname = urlsplit(self.database_url).hostname
-            if hostname is not None and hostname.lower() in {"localhost", "127.0.0.1"}:
+            # The stub answer generator is a test fixture, not a weaker model: it must
+            # never be mistaken for a real answer outside development.
+            if self.llm_provider == "fake":
                 raise ValueError(
-                    "APP_DATABASE_URL must use a remotely reachable database host "
+                    "APP_LLM_PROVIDER must select a production-grade provider "
+                    "outside development and test"
+                )
+            if self.llm_provider == "openai" and self.openai_api_key is None:
+                raise ValueError(
+                    "APP_OPENAI_API_KEY is required when APP_LLM_PROVIDER=openai "
                     "outside development and test"
                 )
 

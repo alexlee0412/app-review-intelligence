@@ -104,10 +104,38 @@ infrastructure the MVP needs. No Redis, queue, object store, cron, or worker pro
   exhausts connections).
 - Vercel entrypoint and Python runtime dependency manifest.
 - Provisioning the managed database, enabling the vector extension, applying the schema.
-- Monthly aggregation, month-over-month growth, complaint theme synthesis, and LLM
-  narrative summaries — planned, and deliberately outside the current scope.
-- Natural-language query parsing, and the React frontend.
+- Monthly aggregation and month-over-month growth — planned, and deliberately outside the
+  current scope. The dataset is far too small for trend claims to mean anything.
+- Complaint theme clustering, and the React frontend.
 - Approximate vector indexing, only if measurement justifies it.
+
+## Question answering
+
+A natural-language question is answered by a fixed two-step pipeline, not an agent loop:
+
+```
+question -> query planner (LLM) -> validated QueryPlan
+         -> deterministic execution: SQL aggregates + pgvector retrieval
+         -> EvidenceBundle (stable E1..En citation ids)
+         -> answer synthesis (LLM) -> validated AnswerResponse
+```
+
+Exactly two model calls, and the second is skipped when evidence is too thin to support a
+conclusion. The contracts live in `app/schemas/query_plan.py` and `app/schemas/answer.py`.
+
+Rules the code enforces, rather than merely requesting in a prompt:
+
+- A plan may narrow scope but never widen it. The country is clamped to the supported
+  storefront and app identifiers absent from the catalog are dropped, not guessed at.
+- Every figure in an answer comes from a SQL aggregate. Model-authored numbers are
+  discarded and replaced by computed values.
+- Every claim cites evidence ids that must resolve to retrieved rows; a claim citing an
+  unknown id is dropped and the omission recorded as a limitation.
+- Review text is quoted verbatim. Excerpts are trimmed, never rewritten.
+- Thin evidence produces an explicit statement of insufficiency, not a confident summary.
+
+Answer traces reuse the existing `query_runs` table — the plan occupies `parsed_intent`,
+which retrieval had left unused. No schema change was required. Prompts are not persisted.
 
 ## Design decisions and rationale
 

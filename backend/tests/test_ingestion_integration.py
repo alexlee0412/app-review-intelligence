@@ -107,6 +107,12 @@ def test_embedding_backfill_fills_only_null_rows(session: Session) -> None:
     upsert_normalized_records(session, result.apps, result.reviews)
     session.flush()
 
+    # Counted before the run: skipped is a whole-table figure, so the expectation has
+    # to account for any rows the database already holds.
+    preexisting_embedded = session.scalar(
+        select(func.count()).select_from(Review).where(Review.embedding.is_not(None))
+    )
+
     untouched_id = f"{SOURCE}:fixture-r2"
     untouched_vector = FakeEmbeddingProvider().embed_query("already embedded")
     session.execute(
@@ -133,7 +139,8 @@ def test_embedding_backfill_fills_only_null_rows(session: Session) -> None:
     ).all()
     assert counts.embedded == 5
     assert counts.remaining == 0
-    assert counts.skipped == 1
+    # The one fixture row seeded above, plus whatever was already embedded.
+    assert counts.skipped == preexisting_embedded + 1
     assert len(rows) == 6
     assert all(row.embedding is not None for row in rows)
     assert all(len(row.embedding) == EMBEDDING_DIMENSION for row in rows)

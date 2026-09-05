@@ -8,6 +8,9 @@ htmlcov/
 
 # Environments
 .env
+# Backups and per-machine variants hold the same secrets as .env.
+.env.*
+!.env.example
 .venv/
 
 # OS
