@@ -258,7 +258,13 @@ class OpenAILLMClient:
                 )
                 if not retryable or attempt == 4:
                     if status_code is None:
-                        raise LLMError("LLM provider request failed") from None
+                        # The exception type is safe to surface and is usually the
+                        # only clue for a timeout or connection failure; the message
+                        # is dropped because it can embed request details.
+                        raise LLMError(
+                            "LLM provider request failed "
+                            f"({type(exc).__name__})"
+                        ) from None
                     raise LLMError(
                         f"LLM provider request failed with HTTP status {status_code}"
                     ) from None

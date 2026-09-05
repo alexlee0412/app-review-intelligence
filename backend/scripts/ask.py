@@ -8,6 +8,7 @@ import sys
 from typing import Any
 
 from app.services.ask_service import AskOverrides, answer_question
+from app.services.llm_provider import LLMError
 
 
 def _ratings(value: str) -> list[int]:
@@ -79,8 +80,16 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         return run(args)
-    except Exception:
-        print("fatal: unable to answer question", file=sys.stderr)
+    except Exception as exc:
+        # The class name distinguishes a provider timeout from a database or
+        # validation failure. Only our own errors expose their message, since an
+        # arbitrary exception can embed a connection string.
+        detail = str(exc) if isinstance(exc, LLMError) else ""
+        suffix = f": {detail}" if detail else ""
+        print(
+            f"fatal: unable to answer question ({type(exc).__name__}){suffix}",
+            file=sys.stderr,
+        )
         return 1
 
 

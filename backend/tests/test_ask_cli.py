@@ -124,7 +124,10 @@ def test_main_reports_failure_to_stderr(
     assert ask.main() == 1
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == "fatal: unable to answer question\n"
+    # The class name is reported so a provider timeout is distinguishable from a
+    # database or validation failure, but an arbitrary exception's message is not,
+    # since it can embed a connection string.
+    assert captured.err == "fatal: unable to answer question (ValueError)\n"
     assert "bad input" not in captured.err
 
 

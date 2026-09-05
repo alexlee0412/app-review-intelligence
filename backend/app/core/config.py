@@ -58,7 +58,9 @@ class Settings(BaseSettings):
     llm_provider: str = "fake"
     planner_model: str = "gpt-5-mini"
     synthesizer_model: str = "gpt-5"
-    llm_timeout_seconds: int = 60
+    # Reasoning models routinely spend ~1 minute on a synthesis call, so a 60s
+    # budget fails intermittently rather than cleanly.
+    llm_timeout_seconds: int = 180
     # Reasoning models bill their internal reasoning against this same budget, and
     # reasoning runs before any output token is emitted. A budget sized only for the
     # visible answer is spent entirely on reasoning and returns empty content.
