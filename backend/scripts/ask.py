@@ -39,9 +39,63 @@ def _session_factory() -> Any:
     return SessionLocal
 
 
+def _distribution_text(distribution: object) -> str | None:
+    if not isinstance(distribution, dict):
+        return None
+    parts = []
+    for rating in range(1, 6):
+        value = distribution.get(rating, distribution.get(str(rating)))
+        if value is not None:
+            parts.append(f"{rating}★ {value}")
+    return " · ".join(parts) or None
+
+
+def _metric_parts(metrics: dict[str, object], *, totals: bool) -> list[str]:
+    review_key = "total_reviews" if totals else "review_count"
+    matched_key = "total_matched" if totals else "matched_count"
+    average_key = "overall_avg_rating" if totals else "avg_rating"
+    parts: list[str] = []
+    if metrics.get(review_key) is not None:
+        parts.append(f"Reviews analyzed: {metrics[review_key]}")
+    if metrics.get(matched_key) is not None:
+        parts.append(f"Matched reviews: {metrics[matched_key]}")
+    if metrics.get(average_key) is not None:
+        parts.append(f"Average rating: {metrics[average_key]}")
+    return parts
+
+
+def _print_metrics(metrics: dict[str, object]) -> None:
+    print("Metrics:")
+    totals = metrics.get("totals")
+    if isinstance(totals, dict):
+        for part in _metric_parts(totals, totals=True):
+            print(part)
+        distribution = _distribution_text(totals.get("rating_distribution"))
+        if distribution is not None:
+            print(f"Rating distribution: {distribution}")
+
+    apps = metrics.get("apps")
+    app_metrics = (
+        [item for item in apps if isinstance(item, dict)]
+        if isinstance(apps, list)
+        else []
+    )
+    if len(app_metrics) > 1 or (app_metrics and not isinstance(totals, dict)):
+        for app in app_metrics:
+            name = app.get("app_name") or app.get("app_id") or "App"
+            parts = _metric_parts(app, totals=False)
+            if parts:
+                print(f"{name}: {' · '.join(parts)}")
+            distribution = _distribution_text(app.get("rating_distribution"))
+            if distribution is not None:
+                print(f"  Rating distribution: {distribution}")
+
+
 def _print_human(response: object) -> None:
     print("Answer:")
     print(response.answer)
+    if response.metrics:
+        _print_metrics(response.metrics)
     print("Findings:")
     for finding in response.findings:
         citations = " ".join(f"[{item}]" for item in finding.evidence_ids)

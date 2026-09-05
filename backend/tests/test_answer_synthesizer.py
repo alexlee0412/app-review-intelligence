@@ -74,6 +74,57 @@ def _bundle() -> EvidenceBundle:
     )
 
 
+def _numeric_bundle(*, excerpt: str = "Stored review text") -> EvidenceBundle:
+    bundle = _bundle()
+    evidence = bundle.evidence[0].model_copy(update={"excerpt": excerpt})
+    aggregate = AppAggregate(
+        app_id="app-one",
+        app_name="App One",
+        review_count=10,
+        matched_count=3,
+        avg_rating=2.2,
+        rating_distribution={1: 5, 2: 2, 3: 1, 4: 0, 5: 2},
+    )
+    return bundle.model_copy(
+        update={
+            "aggregates": [aggregate],
+            "totals": {
+                "total_reviews": 10,
+                "total_matched": 3,
+                "apps_with_matches": 1,
+                "overall_avg_rating": 2.2,
+                "rating_distribution": {1: 5, 2: 2, 3: 1, 4: 0, 5: 2},
+            },
+            "evidence": [evidence, *bundle.evidence[1:]],
+        }
+    )
+
+
+def _synthesize_finding(
+    bundle: EvidenceBundle,
+    *,
+    claim: str,
+    kind: str,
+    evidence_ids: list[str] | None = None,
+    answer: str = "A grounded response.",
+):
+    client = StubClient(
+        {
+            "answer": answer,
+            "findings": [
+                {
+                    "claim": claim,
+                    "evidence_ids": evidence_ids or ["E1"],
+                    "kind": kind,
+                }
+            ],
+        }
+    )
+    return synthesize_answer(
+        bundle, client=client, model="answer-model", max_output_tokens=500
+    )
+
+
 def test_synthesizer_calls_once_with_only_allowed_evidence_text() -> None:
     client = StubClient(
         {
@@ -96,7 +147,7 @@ def test_synthesizer_calls_once_with_only_allowed_evidence_text() -> None:
     assert output.findings[0].evidence_ids == ["E1"]
     assert limitations == []
     payload = json.loads(client.calls[0]["user"])
-    assert payload["evidence"][0]["excerpt"] == "Stored review text"
+    assert payload["evidence"][0]["untrusted_excerpt"] == "Stored review text"
     assert "tail that is not in the excerpt" not in client.calls[0]["user"]
     assert "review_id" not in payload["evidence"][0]
     assert payload["aggregates"][0]["matched_count"] == 3
@@ -183,3 +234,100 @@ def test_programming_error_propagates() -> None:
         assert str(exc) == "implementation error"
     else:
         raise AssertionError("programming error did not propagate")
+
+
+def test_computed_finding_with_fabricated_numbers_is_dropped() -> None:
+    claim = "There are 1000 complaints and the average rating is 4.9."
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(), claim=claim, kind="computed"
+    )
+    assert output.findings == []
+    assert any(claim in limitation for limitation in limitations)
+
+
+def test_computed_finding_with_deterministic_numbers_survives() -> None:
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(),
+        claim="There are 10 reviews and the average rating is 2.20.",
+        kind="computed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+def test_thousands_separator_compares_as_a_numeric_value() -> None:
+    bundle = _numeric_bundle()
+    totals = {**bundle.totals, "historical_review_count": 1000}
+    output, limitations = _synthesize_finding(
+        bundle.model_copy(update={"totals": totals}),
+        claim="There are 1,000 historical reviews.",
+        kind="computed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+def test_valid_citation_does_not_authorize_unsupported_number() -> None:
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(),
+        claim="The app received 700 complaints.",
+        kind="interpretation",
+    )
+    assert output.findings == []
+    assert limitations
+
+
+def test_observed_excerpt_numbers_survive_normalization() -> None:
+    excerpt = "$60 a year is absurd; 80% of the app requires a subscription."
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(excerpt=excerpt),
+        claim="$60 a year is absurd and 80% requires a subscription.",
+        kind="observed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+def test_observed_label_does_not_authorize_fabricated_figure() -> None:
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(excerpt="The price is too high."),
+        claim="The price is $900 per year.",
+        kind="observed",
+    )
+    assert output.findings == []
+    assert limitations
+
+
+def test_dates_versions_and_citations_do_not_trigger_numeric_rejection() -> None:
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(),
+        claim="Version 7.4.0 was reviewed on 2026-09-03 [E1].",
+        kind="observed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+def test_digits_embedded_in_larger_tokens_are_not_numbers() -> None:
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(),
+        claim="SKU A1000B is mentioned in the review [E1].",
+        kind="observed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+def test_answer_with_unsupported_number_gets_one_limitation_without_rewrite() -> None:
+    answer = "There are 700 complaints and 9.9 issues per review [E1]."
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(),
+        claim="There are 10 reviews.",
+        kind="computed",
+        answer=answer,
+    )
+    assert output.answer == answer
+    numeric_limitations = [
+        item for item in limitations if "narrative" in item.lower()
+    ]
+    assert len(numeric_limitations) == 1
