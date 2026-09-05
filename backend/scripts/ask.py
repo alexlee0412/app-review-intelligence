@@ -1,0 +1,88 @@
+"""Ask a grounded question about stored app reviews."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from typing import Any
+
+from app.services.ask_service import AskOverrides, answer_question
+
+
+def _ratings(value: str) -> list[int]:
+    try:
+        ratings = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("ratings must be comma-separated integers") from exc
+    if not ratings or any(rating < 1 or rating > 5 for rating in ratings):
+        raise argparse.ArgumentTypeError("ratings must be between 1 and 5")
+    return list(dict.fromkeys(ratings))
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Answer a grounded question about stored app reviews."
+    )
+    parser.add_argument("question")
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument("--top-k", type=int)
+    parser.add_argument("--app", action="append", dest="apps")
+    parser.add_argument("--rating", type=_ratings, dest="ratings")
+    return parser
+
+
+def _session_factory() -> Any:
+    from app.core.db import SessionLocal
+
+    return SessionLocal
+
+
+def _print_human(response: object) -> None:
+    print("Answer:")
+    print(response.answer)
+    print("Findings:")
+    for finding in response.findings:
+        citations = " ".join(f"[{item}]" for item in finding.evidence_ids)
+        print(f"- [{finding.kind}] {finding.claim} {citations}".rstrip())
+    print("Evidence:")
+    for item in response.evidence:
+        review = item.review
+        print(
+            f"[{item.evidence_id}] {review.app_name}, {review.rating}★, "
+            f"{review.created_at.date().isoformat()}"
+        )
+        print(f"  {json.dumps(item.excerpt, ensure_ascii=False)}")
+    print("Limitations:")
+    for limitation in [*response.limitations, *response.warnings]:
+        print(f"- {limitation}")
+    print("Trace:")
+    print(json.dumps(response.trace.model_dump(mode="json"), ensure_ascii=False))
+
+
+def run(args: argparse.Namespace) -> int:
+    overrides = AskOverrides(
+        top_k=args.top_k,
+        apps=args.apps,
+        ratings=args.ratings,
+    )
+    with _session_factory()() as session:
+        response = answer_question(session, args.question, overrides=overrides)
+    if args.as_json:
+        print(json.dumps(response.model_dump(mode="json"), ensure_ascii=False))
+    else:
+        _print_human(response)
+    return 0
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    try:
+        return run(args)
+    except Exception:
+        print("fatal: unable to answer question", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
