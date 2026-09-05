@@ -59,7 +59,10 @@ class Settings(BaseSettings):
     planner_model: str = "gpt-5-mini"
     synthesizer_model: str = "gpt-5"
     llm_timeout_seconds: int = 60
-    llm_max_output_tokens: int = 2000
+    # Reasoning models bill their internal reasoning against this same budget, and
+    # reasoning runs before any output token is emitted. A budget sized only for the
+    # visible answer is spent entirely on reasoning and returns empty content.
+    llm_max_output_tokens: int = 8000
 
     @model_validator(mode="after")
     def validate_embedding_and_production_posture(self) -> "Settings":

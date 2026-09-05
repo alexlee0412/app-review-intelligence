@@ -267,6 +267,15 @@ class OpenAILLMClient:
         if response is None:
             raise LLMError("LLM provider request failed")
 
+        # A reasoning model can spend the whole token budget before emitting output,
+        # which arrives as a successful response with empty content. Reported as
+        # truncation so the budget, rather than the model's JSON, is what gets blamed.
+        if getattr(response.choices[0], "finish_reason", None) == "length":
+            raise LLMResponseError(
+                "LLM provider truncated the response before returning complete JSON; "
+                "increase APP_LLM_MAX_OUTPUT_TOKENS"
+            )
+
         try:
             content = response.choices[0].message.content
             parsed = json.loads(content)

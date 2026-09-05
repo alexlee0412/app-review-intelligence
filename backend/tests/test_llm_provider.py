@@ -125,3 +125,41 @@ def test_openai_rejects_invalid_or_schema_mismatched_output(content: str) -> Non
             schema=SIMPLE_SCHEMA,
             max_output_tokens=100,
         )
+
+
+def test_truncated_response_reports_the_token_budget() -> None:
+    """A reasoning model can exhaust the budget before emitting any JSON."""
+
+    class _Message:
+        content = ""
+
+    class _Choice:
+        finish_reason = "length"
+        message = _Message()
+
+    class _Response:
+        choices = [_Choice()]
+
+    class _Completions:
+        def create(self, **_: object) -> _Response:
+            return _Response()
+
+    class _Chat:
+        completions = _Completions()
+
+    class _Client:
+        chat = _Chat()
+
+    provider = OpenAILLMClient(api_key=SecretStr("placeholder"), timeout_seconds=1)
+    provider._client = _Client()
+
+    with pytest.raises(LLMResponseError) as caught:
+        provider.complete_json(
+            model="gpt-5",
+            system="s",
+            user="u",
+            schema={"type": "object", "properties": {}, "required": []},
+            max_output_tokens=16,
+        )
+
+    assert "APP_LLM_MAX_OUTPUT_TOKENS" in str(caught.value)
