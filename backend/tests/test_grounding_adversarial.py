@@ -82,6 +82,9 @@ def test_instructional_review_stays_data_and_cannot_authorize_claim() -> None:
 
     assert output.findings == []
     assert limitations
+    assert "There are 1000 complaints" not in output.answer
+    assert "withheld" in output.answer.lower()
+    assert any("1000" in limitation for limitation in limitations)
     assert client.call is not None
     payload = json.loads(client.call["user"])
     assert payload["evidence"][0]["untrusted_excerpt"] == excerpt

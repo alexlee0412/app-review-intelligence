@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import pytest
+
 from app.schemas.answer import (
     AppAggregate,
     EvidenceBundle,
@@ -96,6 +98,36 @@ def _numeric_bundle(*, excerpt: str = "Stored review text") -> EvidenceBundle:
                 "rating_distribution": {1: 5, 2: 2, 3: 1, 4: 0, 5: 2},
             },
             "evidence": [evidence, *bundle.evidence[1:]],
+        }
+    )
+
+
+def _timestamp_bundle() -> EvidenceBundle:
+    bundle = _bundle()
+    review = bundle.evidence[0].review.model_copy(
+        update={"created_at": datetime(2026, 9, 23, 14, 37, 52, tzinfo=timezone.utc)}
+    )
+    evidence = bundle.evidence[0].model_copy(update={"review": review})
+    return bundle.model_copy(
+        update={"aggregates": [], "totals": {}, "evidence": [evidence]}
+    )
+
+
+def _precise_average_bundle(
+    average: float = 1.2857142857142858,
+) -> EvidenceBundle:
+    bundle = _bundle()
+    aggregate = AppAggregate(
+        app_id="app-one",
+        app_name="App One",
+        review_count=10,
+        matched_count=7,
+        avg_rating=average,
+    )
+    return bundle.model_copy(
+        update={
+            "aggregates": [aggregate],
+            "totals": {"overall_avg_rating": average},
         }
     )
 
@@ -278,10 +310,10 @@ def test_valid_citation_does_not_authorize_unsupported_number() -> None:
 
 
 def test_observed_excerpt_numbers_survive_normalization() -> None:
-    excerpt = "$60 a year is absurd; 80% of the app requires a subscription."
+    excerpt = "$60 a year is absurd; the monthly price is 11.99."
     output, limitations = _synthesize_finding(
         _numeric_bundle(excerpt=excerpt),
-        claim="$60 a year is absurd and 80% requires a subscription.",
+        claim="$60 a year is absurd and the monthly price is 11.99.",
         kind="observed",
     )
     assert len(output.findings) == 1
@@ -308,6 +340,72 @@ def test_dates_versions_and_citations_do_not_trigger_numeric_rejection() -> None
     assert limitations == []
 
 
+@pytest.mark.parametrize("figure", [9, 23, 14, 37, 52])
+def test_timestamp_components_do_not_ground_fabricated_integers(figure: int) -> None:
+    output, limitations = _synthesize_finding(
+        _timestamp_bundle(),
+        claim=f"There are {figure} complaints.",
+        kind="observed",
+    )
+    assert output.findings == []
+    assert limitations
+
+
+def test_cited_review_year_remains_grounded() -> None:
+    output, limitations = _synthesize_finding(
+        _timestamp_bundle(),
+        claim="The complaint was posted in 2026.",
+        kind="observed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+def test_iso_date_remains_exempt_from_numeric_validation() -> None:
+    output, limitations = _synthesize_finding(
+        _timestamp_bundle(),
+        claim="The complaint was posted on 2026-09-23.",
+        kind="observed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+@pytest.mark.parametrize(
+    "figure",
+    ["1.3", "1.29", "1.286", "1.2857142857142858"],
+)
+def test_computed_average_accepts_precision_appropriate_rounding(figure: str) -> None:
+    output, limitations = _synthesize_finding(
+        _precise_average_bundle(),
+        claim=f"The average rating is {figure}.",
+        kind="computed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+@pytest.mark.parametrize("figure", ["1.4", "1.28", "2.9", "1"])
+def test_computed_average_rejects_incorrect_rounding(figure: str) -> None:
+    output, limitations = _synthesize_finding(
+        _precise_average_bundle(),
+        claim=f"The average rating is {figure}.",
+        kind="computed",
+    )
+    assert output.findings == []
+    assert limitations
+
+
+def test_written_trailing_zeroes_preserve_claim_precision() -> None:
+    output, limitations = _synthesize_finding(
+        _precise_average_bundle(1.34),
+        claim="The average rating is 1.30.",
+        kind="computed",
+    )
+    assert output.findings == []
+    assert limitations
+
+
 def test_digits_embedded_in_larger_tokens_are_not_numbers() -> None:
     output, limitations = _synthesize_finding(
         _numeric_bundle(),
@@ -318,7 +416,7 @@ def test_digits_embedded_in_larger_tokens_are_not_numbers() -> None:
     assert limitations == []
 
 
-def test_answer_with_unsupported_number_gets_one_limitation_without_rewrite() -> None:
+def test_answer_with_unsupported_numbers_is_withheld_and_findings_survive() -> None:
     answer = "There are 700 complaints and 9.9 issues per review [E1]."
     output, limitations = _synthesize_finding(
         _numeric_bundle(),
@@ -326,8 +424,26 @@ def test_answer_with_unsupported_number_gets_one_limitation_without_rewrite() ->
         kind="computed",
         answer=answer,
     )
-    assert output.answer == answer
+    assert answer not in output.answer
+    assert "withheld" in output.answer.lower()
+    assert "validated findings" in output.answer.lower()
+    assert len(output.findings) == 1
     numeric_limitations = [
         item for item in limitations if "narrative" in item.lower()
     ]
     assert len(numeric_limitations) == 1
+    assert "700" in numeric_limitations[0]
+    assert "9.9" in numeric_limitations[0]
+
+
+def test_grounded_answer_narrative_is_returned_unchanged() -> None:
+    answer = "There are 10 reviews [E1]."
+    output, limitations = _synthesize_finding(
+        _numeric_bundle(),
+        claim="There are 10 reviews.",
+        kind="computed",
+        answer=answer,
+    )
+    assert output.answer == answer
+    assert len(output.findings) == 1
+    assert limitations == []

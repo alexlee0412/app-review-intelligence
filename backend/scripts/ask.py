@@ -59,8 +59,9 @@ def _metric_parts(metrics: dict[str, object], *, totals: bool) -> list[str]:
         parts.append(f"Reviews analyzed: {metrics[review_key]}")
     if metrics.get(matched_key) is not None:
         parts.append(f"Matched reviews: {metrics[matched_key]}")
-    if metrics.get(average_key) is not None:
-        parts.append(f"Average rating: {metrics[average_key]}")
+    average = metrics.get(average_key)
+    if average is not None:
+        parts.append(f"Average rating: {average:.2f}")
     return parts
 
 
@@ -97,9 +98,12 @@ def _print_human(response: object) -> None:
     if response.metrics:
         _print_metrics(response.metrics)
     print("Findings:")
-    for finding in response.findings:
-        citations = " ".join(f"[{item}]" for item in finding.evidence_ids)
-        print(f"- [{finding.kind}] {finding.claim} {citations}".rstrip())
+    if response.findings:
+        for finding in response.findings:
+            citations = " ".join(f"[{item}]" for item in finding.evidence_ids)
+            print(f"- [{finding.kind}] {finding.claim} {citations}".rstrip())
+    else:
+        print("- Nothing could be grounded.")
     print("Evidence:")
     for item in response.evidence:
         review = item.review

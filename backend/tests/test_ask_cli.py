@@ -52,7 +52,7 @@ def _response() -> AnswerResponse:
         metrics={
             "totals": {
                 "total_reviews": 10,
-                "overall_avg_rating": 2.2,
+                "overall_avg_rating": 1.2857142857142858,
                 "rating_distribution": {1: 5, 2: 2, 3: 1, 4: 0, 5: 2},
             },
             "apps": [
@@ -61,7 +61,7 @@ def _response() -> AnswerResponse:
                     "app_name": "App One",
                     "review_count": 10,
                     "matched_count": 3,
-                    "avg_rating": 2.2,
+                    "avg_rating": 1.2857142857142858,
                     "rating_distribution": {1: 5, 2: 2, 3: 1, 4: 0, 5: 2},
                 }
             ],
@@ -113,6 +113,7 @@ def test_json_output_validates_as_answer_response(
     decoded = json.loads(rendered)
     assert AnswerResponse.model_validate(decoded)
     assert decoded == json.loads(response.model_dump_json())
+    assert decoded["metrics"]["totals"]["overall_avg_rating"] == 1.2857142857142858
     overrides = captured["overrides"]
     assert overrides.top_k == 4
     assert overrides.apps == ["App One", "app-two"]
@@ -139,7 +140,8 @@ def test_human_output_has_required_sections(
         assert heading in output
     assert output.index("Metrics:") < output.index("Findings:")
     assert "Reviews analyzed: 10" in output
-    assert "Average rating: 2.2" in output
+    assert "Average rating: 1.29" in output
+    assert "1.2857142857142858" not in output
     assert "Rating distribution: 1★ 5 · 2★ 2 · 3★ 1 · 4★ 0 · 5★ 2" in output
     assert "[observed]" in output
     assert "[E1] App One, 1★, 2026-07-01" in output
@@ -170,7 +172,7 @@ def test_human_output_renders_each_app_when_multiple_are_present(
     assert ask.run(args) == 0
     output = capsys.readouterr().out
     assert (
-        "App One: Reviews analyzed: 10 · Matched reviews: 3 · Average rating: 2.2"
+        "App One: Reviews analyzed: 10 · Matched reviews: 3 · Average rating: 1.29"
         in output
     )
     assert "App Two: Reviews analyzed: 7 · Matched reviews: 2" in output
@@ -185,6 +187,30 @@ def test_human_output_omits_metrics_section_when_metrics_are_absent(
 
     assert ask.run(ask._parser().parse_args(["Why?"])) == 0
     assert "Metrics:" not in capsys.readouterr().out
+
+
+def test_human_output_explains_withheld_narrative_without_findings(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    response = _response().model_copy(
+        update={
+            "answer": (
+                "The generated narrative was withheld because it contained figures "
+                "that could not be grounded. Consult the validated findings below."
+            ),
+            "findings": [],
+            "limitations": ["The answer narrative contained an unsupported figure."],
+        }
+    )
+    monkeypatch.setattr(ask, "_session_factory", lambda: SessionContext)
+    monkeypatch.setattr(ask, "answer_question", lambda *args, **kwargs: response)
+
+    assert ask.run(ask._parser().parse_args(["Why?"])) == 0
+    output = capsys.readouterr().out
+    assert "generated narrative was withheld" in output
+    assert "Nothing could be grounded." in output
+    assert "Average rating: 1.29" in output
+    assert "[E1] App One" in output
 
 
 def test_main_reports_failure_to_stderr(

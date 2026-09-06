@@ -6,6 +6,7 @@ import json
 import math
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -42,6 +43,18 @@ _NUMBER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _NUMERIC_TOLERANCE = 1e-9
+_MAX_ROUNDING_DECIMAL_PLACES = 6
+_WITHHELD_NARRATIVE = (
+    "The generated narrative was withheld because it contained figures that could not "
+    "be grounded. Consult the validated findings below."
+)
+
+
+@dataclass(frozen=True)
+class _NumberToken:
+    value: float
+    written: str
+    decimal_places: int | None
 
 
 def _payload(bundle: EvidenceBundle) -> dict[str, Any]:
@@ -89,14 +102,29 @@ def _safe_output(message: str) -> tuple[SynthesisOutput, list[str]]:
     )
 
 
-def _numbers_in_text(value: str) -> list[float]:
+def _number_tokens_in_text(value: str) -> list[_NumberToken]:
     without_citations = _CITATION_PATTERN.sub(" ", value)
     without_dates = _ISO_DATE_PATTERN.sub(" ", without_citations)
     without_versions = _VERSION_PATTERN.sub(" ", without_dates)
-    return [
-        float(match.group("number").replace(",", ""))
-        for match in _NUMBER_PATTERN.finditer(without_versions)
-    ]
+    tokens: list[_NumberToken] = []
+    for match in _NUMBER_PATTERN.finditer(without_versions):
+        written_number = match.group("number").replace(",", "")
+        mantissa = written_number.lower().partition("e")[0]
+        decimal_places = (
+            len(mantissa.rsplit(".", 1)[1]) if "." in mantissa else None
+        )
+        tokens.append(
+            _NumberToken(
+                value=float(written_number),
+                written=match.group(0).strip(),
+                decimal_places=decimal_places,
+            )
+        )
+    return tokens
+
+
+def _numbers_in_text(value: str) -> list[float]:
+    return [token.value for token in _number_tokens_in_text(value)]
 
 
 def _add_numeric_values(value: object, destination: list[float]) -> None:
@@ -129,14 +157,7 @@ def _aggregate_numbers(bundle: EvidenceBundle) -> list[float]:
 
 
 def _date_numbers(value: datetime) -> list[float]:
-    return [
-        float(value.year),
-        float(value.month),
-        float(value.day),
-        float(value.hour),
-        float(value.minute),
-        float(value.second),
-    ]
+    return [float(value.year)]
 
 
 def _evidence_numbers(bundle: EvidenceBundle) -> dict[str, list[float]]:
@@ -150,24 +171,39 @@ def _evidence_numbers(bundle: EvidenceBundle) -> dict[str, list[float]]:
     }
 
 
-def _is_allowed(number: float, allowed: list[float]) -> bool:
-    return any(
+def _is_allowed(number: _NumberToken, allowed: list[float]) -> bool:
+    if number.decimal_places is None:
+        return any(number.value == candidate for candidate in allowed)
+    if any(
         math.isclose(
-            number,
+            number.value,
             candidate,
             rel_tol=_NUMERIC_TOLERANCE,
             abs_tol=_NUMERIC_TOLERANCE,
         )
         for candidate in allowed
+    ):
+        return True
+    decimal_places = min(
+        number.decimal_places,
+        _MAX_ROUNDING_DECIMAL_PLACES,
+    )
+    rounded_number = round(number.value, decimal_places)
+    return any(
+        round(candidate, decimal_places) == rounded_number for candidate in allowed
     )
 
 
-def _unsupported_numbers(value: str, allowed: list[float]) -> list[float]:
+def _unsupported_numbers(value: str, allowed: list[float]) -> list[_NumberToken]:
     return [
         number
-        for number in _numbers_in_text(value)
+        for number in _number_tokens_in_text(value)
         if not _is_allowed(number, allowed)
     ]
+
+
+def _figure_names(numbers: list[_NumberToken]) -> str:
+    return ", ".join(dict.fromkeys(number.written for number in numbers))
 
 
 def _validate_findings(
@@ -190,10 +226,12 @@ def _validate_findings(
         if finding.kind != "computed":
             for evidence_id in finding.evidence_ids:
                 allowed.extend(evidence_numbers[evidence_id])
-        if _unsupported_numbers(finding.claim, allowed):
+        unsupported = _unsupported_numbers(finding.claim, allowed)
+        if unsupported:
             limitations.append(
                 f"Dropped numerically unsupported finding {finding.claim!r}; its figures "
-                "did not resolve to computed metrics or cited evidence."
+                "did not resolve to computed metrics or cited evidence: "
+                f"{_figure_names(unsupported)}."
             )
             continue
         findings.append(finding)
@@ -206,11 +244,13 @@ def _validate_findings(
     }
     for evidence_id in sorted(cited_ids):
         answer_allowed.extend(evidence_numbers[evidence_id])
-    if _unsupported_numbers(output.answer, answer_allowed):
+    unsupported_answer_numbers = _unsupported_numbers(output.answer, answer_allowed)
+    if unsupported_answer_numbers:
         limitations.append(
             "The answer narrative contains figures not drawn from the computed metrics "
-            "or cited evidence."
+            f"or cited evidence: {_figure_names(unsupported_answer_numbers)}."
         )
+        output = output.model_copy(update={"answer": _WITHHELD_NARRATIVE})
     return output.model_copy(update={"findings": findings}), limitations
 
 
