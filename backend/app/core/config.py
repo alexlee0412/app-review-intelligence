@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     app_host: str = Field(default="0.0.0.0", validation_alias="APP_HOST")
     app_port: int = Field(default=8000, validation_alias="APP_PORT")
     app_reload: bool = Field(default=True, validation_alias="APP_RELOAD")
+    cors_allow_origins: list[str] = []
 
     # These use the default env_prefix + field-name convention, resolving
     # to APP_DATABASE_URL and APP_DATABASE_ECHO.
