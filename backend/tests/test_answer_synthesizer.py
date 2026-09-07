@@ -117,17 +117,63 @@ def _precise_average_bundle(
     average: float = 1.2857142857142858,
 ) -> EvidenceBundle:
     bundle = _bundle()
+    rating_distribution = {1: 5, 2: 2, 3: 0, 4: 0, 5: 0}
     aggregate = AppAggregate(
         app_id="app-one",
         app_name="App One",
-        review_count=10,
+        review_count=7,
         matched_count=7,
         avg_rating=average,
+        rating_distribution=rating_distribution,
     )
     return bundle.model_copy(
         update={
             "aggregates": [aggregate],
-            "totals": {"overall_avg_rating": average},
+            "totals": {
+                "overall_avg_rating": average,
+                "rating_distribution": rating_distribution,
+            },
+        }
+    )
+
+
+def _near_integer_average_bundle() -> EvidenceBundle:
+    bundle = _bundle()
+    rating_distribution = {1: 2, 2: 1, 3: 1, 4: 0, 5: 9}
+    aggregate = AppAggregate(
+        app_id="app-one",
+        app_name="App One",
+        review_count=13,
+        matched_count=13,
+        avg_rating=4.000000000000001,
+        rating_distribution=rating_distribution,
+    )
+    return bundle.model_copy(
+        update={
+            "aggregates": [aggregate],
+            "totals": {
+                "overall_avg_rating": 4.000000000000001,
+                "rating_distribution": rating_distribution,
+            },
+        }
+    )
+
+
+def _distribution_bundle() -> EvidenceBundle:
+    bundle = _bundle()
+    rating_distribution = {1: 10, 2: 20, 3: 30, 4: 40, 5: 50}
+    aggregate = AppAggregate(
+        app_id="app-one",
+        app_name="App One",
+        review_count=150,
+        matched_count=150,
+        avg_rating=3.6666666666666665,
+        rating_distribution=rating_distribution,
+    )
+    return bundle.model_copy(
+        update={
+            "aggregates": [aggregate],
+            "totals": {"rating_distribution": rating_distribution},
         }
     )
 
@@ -310,10 +356,10 @@ def test_valid_citation_does_not_authorize_unsupported_number() -> None:
 
 
 def test_observed_excerpt_numbers_survive_normalization() -> None:
-    excerpt = "$60 a year is absurd; the monthly price is 11.99."
+    excerpt = "$60 a year is absurd; 80% requires a subscription."
     output, limitations = _synthesize_finding(
         _numeric_bundle(excerpt=excerpt),
-        claim="$60 a year is absurd and the monthly price is 11.99.",
+        claim="$60 a year is absurd and 80% requires a subscription.",
         kind="observed",
     )
     assert len(output.findings) == 1
@@ -373,7 +419,7 @@ def test_iso_date_remains_exempt_from_numeric_validation() -> None:
 
 @pytest.mark.parametrize(
     "figure",
-    ["1.3", "1.29", "1.286", "1.2857142857142858"],
+    ["1.3", "1.29", "1.286", "1.2857142857", "1.2857142857142858"],
 )
 def test_computed_average_accepts_precision_appropriate_rounding(figure: str) -> None:
     output, limitations = _synthesize_finding(
@@ -390,6 +436,53 @@ def test_computed_average_rejects_incorrect_rounding(figure: str) -> None:
     output, limitations = _synthesize_finding(
         _precise_average_bundle(),
         claim=f"The average rating is {figure}.",
+        kind="computed",
+    )
+    assert output.findings == []
+    assert limitations
+
+
+@pytest.mark.parametrize(
+    ("figure", "expected_to_survive"),
+    [("4", True), ("4.0", True), ("5", False)],
+)
+def test_near_integer_average_uses_float_tolerance(
+    figure: str, expected_to_survive: bool
+) -> None:
+    output, limitations = _synthesize_finding(
+        _near_integer_average_bundle(),
+        claim=f"The overall average rating is {figure}.",
+        kind="computed",
+    )
+    assert bool(output.findings) is expected_to_survive
+    assert bool(limitations) is not expected_to_survive
+
+
+@pytest.mark.parametrize("figure", [1, 2, 3, 4, 5])
+def test_distribution_keys_do_not_ground_unrelated_numbers(figure: int) -> None:
+    output, limitations = _synthesize_finding(
+        _distribution_bundle(),
+        claim=f"There are {figure} unrelated complaints.",
+        kind="computed",
+    )
+    assert output.findings == []
+    assert limitations
+
+
+def test_distribution_values_remain_grounded() -> None:
+    output, limitations = _synthesize_finding(
+        _distribution_bundle(),
+        claim="There are 20 reviews in the selected bucket.",
+        kind="computed",
+    )
+    assert len(output.findings) == 1
+    assert limitations == []
+
+
+def test_star_bucket_claim_is_dropped_when_rating_is_only_a_mapping_key() -> None:
+    output, limitations = _synthesize_finding(
+        _distribution_bundle(),
+        claim="There are 10 reviews rated 1 star.",
         kind="computed",
     )
     assert output.findings == []
@@ -425,8 +518,10 @@ def test_answer_with_unsupported_numbers_is_withheld_and_findings_survive() -> N
         answer=answer,
     )
     assert answer not in output.answer
-    assert "withheld" in output.answer.lower()
-    assert "validated findings" in output.answer.lower()
+    assert output.answer == (
+        "The generated narrative was withheld because it contained unsupported numeric "
+        "content. Consult the validated findings, computed metrics, and cited evidence."
+    )
     assert len(output.findings) == 1
     numeric_limitations = [
         item for item in limitations if "narrative" in item.lower()

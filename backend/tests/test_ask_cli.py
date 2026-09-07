@@ -195,8 +195,8 @@ def test_human_output_explains_withheld_narrative_without_findings(
     response = _response().model_copy(
         update={
             "answer": (
-                "The generated narrative was withheld because it contained figures "
-                "that could not be grounded. Consult the validated findings below."
+                "The generated narrative could not be safely grounded. Consult the "
+                "computed metrics and cited evidence."
             ),
             "findings": [],
             "limitations": ["The answer narrative contained an unsupported figure."],
@@ -207,7 +207,8 @@ def test_human_output_explains_withheld_narrative_without_findings(
 
     assert ask.run(ask._parser().parse_args(["Why?"])) == 0
     output = capsys.readouterr().out
-    assert "generated narrative was withheld" in output
+    assert "generated narrative could not be safely grounded" in output
+    assert "validated findings" not in output
     assert "Nothing could be grounded." in output
     assert "Average rating: 1.29" in output
     assert "[E1] App One" in output

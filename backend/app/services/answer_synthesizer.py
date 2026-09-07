@@ -44,9 +44,13 @@ _NUMBER_PATTERN = re.compile(
 )
 _NUMERIC_TOLERANCE = 1e-9
 _MAX_ROUNDING_DECIMAL_PLACES = 6
-_WITHHELD_NARRATIVE = (
-    "The generated narrative was withheld because it contained figures that could not "
-    "be grounded. Consult the validated findings below."
+_WITHHELD_NARRATIVE_WITH_FINDINGS = (
+    "The generated narrative was withheld because it contained unsupported numeric "
+    "content. Consult the validated findings, computed metrics, and cited evidence."
+)
+_WITHHELD_NARRATIVE_WITHOUT_FINDINGS = (
+    "The generated narrative could not be safely grounded. Consult the computed metrics "
+    "and cited evidence."
 )
 
 
@@ -136,8 +140,7 @@ def _add_numeric_values(value: object, destination: list[float]) -> None:
             destination.append(number)
         return
     if isinstance(value, Mapping):
-        for key, item in value.items():
-            _add_numeric_values(key, destination)
+        for item in value.values():
             _add_numeric_values(item, destination)
         return
     if isinstance(value, (list, tuple, set)):
@@ -172,8 +175,6 @@ def _evidence_numbers(bundle: EvidenceBundle) -> dict[str, list[float]]:
 
 
 def _is_allowed(number: _NumberToken, allowed: list[float]) -> bool:
-    if number.decimal_places is None:
-        return any(number.value == candidate for candidate in allowed)
     if any(
         math.isclose(
             number.value,
@@ -184,6 +185,8 @@ def _is_allowed(number: _NumberToken, allowed: list[float]) -> bool:
         for candidate in allowed
     ):
         return True
+    if number.decimal_places is None:
+        return False
     decimal_places = min(
         number.decimal_places,
         _MAX_ROUNDING_DECIMAL_PLACES,
@@ -250,7 +253,12 @@ def _validate_findings(
             "The answer narrative contains figures not drawn from the computed metrics "
             f"or cited evidence: {_figure_names(unsupported_answer_numbers)}."
         )
-        output = output.model_copy(update={"answer": _WITHHELD_NARRATIVE})
+        withheld_narrative = (
+            _WITHHELD_NARRATIVE_WITH_FINDINGS
+            if findings
+            else _WITHHELD_NARRATIVE_WITHOUT_FINDINGS
+        )
+        output = output.model_copy(update={"answer": withheld_narrative})
     return output.model_copy(update={"findings": findings}), limitations
 
 
