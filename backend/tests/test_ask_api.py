@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Generator
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api import ask as ask_api
@@ -83,6 +85,12 @@ def _override_db(session: FakeSession) -> None:
     app.dependency_overrides[get_db] = lambda: session
 
 
+@pytest.fixture
+def server_error_client() -> Generator[TestClient, None, None]:
+    yield TestClient(app, raise_server_exceptions=False)
+    app.dependency_overrides.clear()
+
+
 def test_ask_returns_answer_contract_unchanged_and_calls_service_once(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -147,11 +155,6 @@ _INTERNAL_DETAIL = (
     ("error", "expected_status", "expected_detail"),
     [
         (
-            ValueError(_INTERNAL_DETAIL),
-            400,
-            "The question could not be interpreted.",
-        ),
-        (
             LLMConfigurationError(_INTERNAL_DETAIL),
             503,
             "Answer service is not configured.",
@@ -198,6 +201,49 @@ def test_ask_maps_failures_without_exposing_internal_details(
 
     assert response.status_code == expected_status
     assert response.json() == {"detail": expected_detail}
+    response_text = response.text.lower()
+    for forbidden in (
+        _INTERNAL_DETAIL.lower(),
+        "secret-model",
+        "secret-provider",
+        "postgresql://",
+        "password",
+        "traceback",
+    ):
+        assert forbidden not in response_text
+
+
+def _internal_validation_error() -> ValidationError:
+    try:
+        AnswerResponse.model_validate({"query_run_id": _INTERNAL_DETAIL})
+    except ValidationError as exc:
+        return exc
+    raise AssertionError("invalid response unexpectedly passed validation")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [ValueError(_INTERNAL_DETAIL), _internal_validation_error()],
+    ids=["plain-value-error", "pydantic-validation-error"],
+)
+def test_internal_value_errors_use_sanitized_server_response(
+    server_error_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    def answer_question(*args: object, **kwargs: object) -> AnswerResponse:
+        raise error
+
+    _override_db(FakeSession())
+    monkeypatch.setattr(ask_api, "answer_question", answer_question)
+
+    response = server_error_client.post(
+        "/api/v1/reviews/ask",
+        json={"question": "Why can users not cancel?"},
+    )
+
+    assert response.status_code == 500
+    assert response.status_code != 400
     response_text = response.text.lower()
     for forbidden in (
         _INTERNAL_DETAIL.lower(),

@@ -37,11 +37,6 @@ def post_ask(
     """Answer one review question through the canonical ask service."""
     try:
         return answer_question(session, request.question)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The question could not be interpreted.",
-        ) from exc
     except LLMConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
