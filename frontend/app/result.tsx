@@ -116,7 +116,7 @@ export function AnswerResult({ response }: { response: AnswerResponse }) {
                         <dd>
                           {app.avg_rating === null
                             ? "Not available"
-                            : `${app.avg_rating}★`}
+                            : `${app.avg_rating.toFixed(2)}★`}
                         </dd>
                       </div>
                     </dl>
@@ -156,6 +156,9 @@ export function AnswerResult({ response }: { response: AnswerResponse }) {
               <li key={index}>
                 <p className={styles.verbatim}>{finding.claim}</p>
                 <div className={styles.chips}>
+                  <span className={`${styles.chip} ${styles[finding.kind]}`}>
+                    {finding.kind}
+                  </span>
                   {finding.evidence_ids.map((id, index) => (
                     <span className={styles.chip} key={`${id}-${index}`}>
                       [{id}]

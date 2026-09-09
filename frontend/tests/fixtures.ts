@@ -12,6 +12,16 @@ const syntheticResponse = {
       evidence_ids: ["E1"],
       kind: "observed",
     },
+    {
+      claim: "The sample dataset contains 23 reviews.",
+      evidence_ids: [],
+      kind: "computed",
+    },
+    {
+      claim: "Editing controls may interrupt the workflow.",
+      evidence_ids: ["E3", "E4"],
+      kind: "interpretation",
+    },
   ],
   metrics: {
     totals: {
@@ -27,7 +37,7 @@ const syntheticResponse = {
         app_name: "Sample Camera",
         review_count: 23,
         matched_count: 17,
-        avg_rating: 2.75,
+        avg_rating: 2.2857142857142856,
         rating_distribution: { "1": 7, "2": 0, "3": 8, "4": 4, "5": 4 },
         oldest_review_at: "2026-01-01T00:00:00Z",
         newest_review_at: "2026-01-09T00:00:00Z",

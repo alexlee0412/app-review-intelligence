@@ -1,9 +1,73 @@
+import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AnswerResult } from "../app/result";
+import styles from "../app/page.module.css";
 import { fullResponse } from "./fixtures";
 
+// Apply the production stylesheet with its module class names in jsdom.
+const stylesheet = document.createElement("style");
+beforeAll(() => {
+  const css = readFileSync("app/page.module.css", "utf8");
+  stylesheet.textContent = css.replace(
+    /\.([a-zA-Z_][\w-]*)/g,
+    (selector, name: string) => (styles[name] ? `.${styles[name]}` : selector),
+  );
+  document.head.appendChild(stylesheet);
+});
+afterAll(() => stylesheet.remove());
+
 describe("grounded result presentation", () => {
+  it("shows all finding kinds as distinct text tags in the supplied order", () => {
+    const response = fullResponse();
+    render(<AnswerResult response={response} />);
+    const rows = within(
+      screen.getByRole("region", { name: "Findings" }),
+    ).getAllByRole("listitem");
+    const kinds = ["observed", "computed", "interpretation"];
+    expect(rows).toHaveLength(kinds.length);
+    const backgrounds = rows.map((row, index) => {
+      expect(within(row).getByText(response.findings[index].claim)).toBeVisible();
+      const tag = within(row).getByText(kinds[index], { exact: true });
+      expect(tag).toBeVisible();
+      return getComputedStyle(tag).backgroundColor;
+    });
+    expect(new Set(backgrounds).size).toBe(3);
+  });
+
+  it.each([
+    [2.2857142857142856, "2.29★"],
+    [2, "2.00★"],
+  ])(
+    "formats per-app average %s to two decimal places without changing data",
+    (average, display) => {
+      const response = fullResponse();
+      response.metrics.apps[0].avg_rating = average;
+      const originalMetrics = structuredClone(response.metrics);
+      render(<AnswerResult response={response} />);
+      const toggle = screen.getByText("View metrics by app");
+      const panel = within(toggle.closest("details")!);
+      expect(panel.getByText(display)).not.toBeVisible();
+      fireEvent.click(toggle);
+      expect(panel.getByText(display)).toBeVisible();
+      expect(
+        panel.queryByText(`${average}★`, { selector: "dd" }),
+      ).not.toBeInTheDocument();
+      expect(response.metrics).toEqual(originalMetrics);
+    },
+  );
+
+  it("preserves multiline answer text with the production pre-wrap style", () => {
+    const response = fullResponse();
+    render(<AnswerResult response={response} />);
+    const answer = within(
+      screen.getByRole("region", { name: "Answer" }),
+    ).getByText(/A reviewer describes/);
+    expect(response.answer).toContain("\n\n- ");
+    expect(answer.textContent).toBe(response.answer);
+    expect(getComputedStyle(answer).whiteSpace).toBe("pre-wrap");
+  });
+
   it("renders each section in order with backend figures and visible caveats", () => {
     const response = fullResponse();
     render(<AnswerResult response={response} />);

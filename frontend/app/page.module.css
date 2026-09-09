@@ -284,6 +284,21 @@
   font-size: 0.78rem;
   font-weight: 600;
 }
+.observed {
+  color: #36535e;
+  background: #edf0f2;
+  border-color: #cdd9df;
+}
+.computed {
+  color: #285950;
+  background: #eaf2f0;
+  border-color: #ccddd7;
+}
+.interpretation {
+  color: #594310;
+  background: #fff5df;
+  border-color: #d6b96f;
+}
 .evidenceCards {
   display: grid;
   gap: 14px;
