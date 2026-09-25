@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import engine
 from app.models import EMBEDDING_DIMENSION, App, QueryRun, Review
+from app.models.query_run import RUN_KIND_ASK
 from app.schemas.answer import (
     AppAggregate,
     EvidenceBundle,
@@ -420,3 +421,11 @@ def test_answer_question_uses_only_owned_rows_and_persists_one_trace(
     assert query_run is not None
     assert query_run.user_query == "What does the owned evidence say?"
     assert query_run.parsed_intent["intent"] == "semantic_evidence"
+    assert query_run.run_kind == RUN_KIND_ASK
+    assert query_run.stage_latency_ms["planner"] is not None
+    assert query_run.stage_latency_ms["query_embedding"] is not None
+    assert query_run.stage_latency_ms["analytics"] is None
+    assert query_run.stage_latency_ms["retrieval"] is not None
+    assert query_run.stage_latency_ms["synthesis"] is not None
+    assert query_run.stage_latency_ms["validation"] is not None
+    assert query_run.stage_latency_ms["total"] is not None

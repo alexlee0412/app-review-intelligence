@@ -6,11 +6,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Text, Uuid, func
+from sqlalchemy import DateTime, String, Text, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
+
+RUN_KIND_ASK = "ask"
+RUN_KIND_SEARCH = "search"
+RUN_KINDS = frozenset({RUN_KIND_ASK, RUN_KIND_SEARCH})
+SCHEMA_VERSION = "query-runs-v1"
 
 
 class QueryRun(Base):
@@ -35,6 +40,18 @@ class QueryRun(Base):
     applied_filters: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     sql_template: Mapped[str | None] = mapped_column(Text, nullable=True)
     result_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    run_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    stage_latency_ms: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    model_usage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    grounding_outcomes: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    retrieval_outcomes: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    run_versions: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import unicodedata
 import uuid
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models import EMBEDDING_DIMENSION, QueryRun
+from app.models.query_run import RUN_KIND_SEARCH
 from app.repositories.review_search_repository import (
     SearchQueryResult,
     search_review_candidates,
@@ -32,6 +34,12 @@ class QueryEmbeddingError(RuntimeError):
 
 class InvalidEmbeddingDimensionError(QueryEmbeddingError):
     """Raised when a provider returns a vector with the wrong dimension."""
+
+
+def _record_stage_latency(session: Session, stage: str, elapsed_ms: float) -> None:
+    recorder = getattr(session, "record_stage_latency", None)
+    if callable(recorder):
+        recorder(stage, elapsed_ms)
 
 
 def _normalized_filters(request: SearchRequest) -> AppliedFilters:
@@ -105,6 +113,7 @@ def _persist_query_run(
     query_run_id = uuid.uuid4()
     query_run = QueryRun(
         query_run_id=query_run_id,
+        run_kind=RUN_KIND_SEARCH,
         user_query=request.query,
         parsed_intent=None,
         applied_filters=filters.model_dump(mode="json"),
@@ -132,7 +141,14 @@ def search_reviews(
     ``matched_review_count`` is the pre-deduplication total matching all SQL filters.
     """
     filters = _normalized_filters(request)
+    embedding_started = time.perf_counter()
     query_vector = _embed_query(embedder, request.query)
+    _record_stage_latency(
+        session,
+        "query_embedding",
+        (time.perf_counter() - embedding_started) * 1000,
+    )
+    retrieval_started = time.perf_counter()
     query_result = search_review_candidates(
         session=session,
         query_vector=query_vector,
@@ -142,6 +158,11 @@ def search_reviews(
     )
     deduplicated = _remove_near_duplicates(query_result.evidence)
     evidence = deduplicated[: request.top_k]
+    _record_stage_latency(
+        session,
+        "retrieval",
+        (time.perf_counter() - retrieval_started) * 1000,
+    )
     query_run_id = _persist_query_run(
         session=session,
         request=request,

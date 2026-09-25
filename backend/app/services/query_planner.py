@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -21,6 +22,7 @@ The fixed dataset scope is the US storefront and iOS platform. A plan may narrow
 scope but must never widen it. Resolve applications only to identifiers in the supplied
 catalog; never invent an app identifier. Do not compute results or produce SQL.
 """
+PROMPT_VERSION = "planner-v1"
 
 _FALLBACK_LIMITATION = (
     "Question planner returned invalid output twice; used deterministic semantic "
@@ -48,6 +50,31 @@ def _fallback_plan(question: str) -> QueryPlan:
     )
 
 
+def _combine_usage(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not records:
+        return None
+    combined = {
+        "provider": records[-1].get("provider"),
+        "model": records[-1].get("model"),
+    }
+    for key in (
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "cached_input_tokens",
+    ):
+        values = [record.get(key) for record in records]
+        combined[key] = (
+            sum(values)
+            if all(
+                isinstance(value, int) and not isinstance(value, bool)
+                for value in values
+            )
+            else None
+        )
+    return combined
+
+
 def plan_question(
     question: str,
     catalog: list[AppCatalogEntry],
@@ -58,6 +85,7 @@ def plan_question(
     """Plan one question, retrying invalid output once before a safe fallback."""
     user_prompt = _planner_input(question, catalog)
     plan: QueryPlan | None = None
+    usage_records: list[dict[str, Any]] = []
 
     for _ in range(2):
         try:
@@ -67,6 +95,7 @@ def plan_question(
                 user=user_prompt,
                 schema=QueryPlan.model_json_schema(),
                 max_output_tokens=settings.llm_max_output_tokens,
+                on_usage=usage_records.append,
             )
             plan = QueryPlan.model_validate(output)
             break
@@ -87,4 +116,5 @@ def plan_question(
         model=settings.planner_model,
         used_fallback=used_fallback,
         limitations=limitations,
+        usage=_combine_usage(usage_records),
     )

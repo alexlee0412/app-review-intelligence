@@ -53,5 +53,20 @@ CREATE TABLE IF NOT EXISTS query_runs (
     applied_filters JSONB,
     sql_template    TEXT,
     result_summary  JSONB,
+    run_kind        VARCHAR(16),
+    stage_latency_ms JSONB,
+    model_usage      JSONB,
+    grounding_outcomes JSONB,
+    retrieval_outcomes JSONB,
+    run_versions     JSONB,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Additive upgrade path for development databases created before instrumentation.
+ALTER TABLE query_runs
+    ADD COLUMN IF NOT EXISTS run_kind VARCHAR(16),
+    ADD COLUMN IF NOT EXISTS stage_latency_ms JSONB,
+    ADD COLUMN IF NOT EXISTS model_usage JSONB,
+    ADD COLUMN IF NOT EXISTS grounding_outcomes JSONB,
+    ADD COLUMN IF NOT EXISTS retrieval_outcomes JSONB,
+    ADD COLUMN IF NOT EXISTS run_versions JSONB;

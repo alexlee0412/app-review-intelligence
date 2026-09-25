@@ -3,11 +3,12 @@
 import uuid
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import CheckConstraint, DateTime, Uuid, inspect
+from sqlalchemy import CheckConstraint, DateTime, String, Uuid, inspect
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.db import Base
 from app.models import App, QueryRun, Review
+from app.models.query_run import RUN_KINDS
 
 
 def test_metadata_contains_core_tables() -> None:
@@ -48,8 +49,25 @@ def test_query_run_primary_key_is_uuid() -> None:
 
 
 def test_json_columns_use_jsonb() -> None:
-    for name in ("parsed_intent", "applied_filters", "result_summary"):
+    for name in (
+        "parsed_intent",
+        "applied_filters",
+        "result_summary",
+        "stage_latency_ms",
+        "model_usage",
+        "grounding_outcomes",
+        "retrieval_outcomes",
+        "run_versions",
+    ):
         assert isinstance(QueryRun.__table__.c[name].type, JSONB)
+
+
+def test_query_run_kind_is_nullable_bounded_text() -> None:
+    column = QueryRun.__table__.c.run_kind
+    assert isinstance(column.type, String)
+    assert column.type.length == 16
+    assert column.nullable is True
+    assert RUN_KINDS == {"ask", "search"}
 
 
 def test_timestamps_are_timezone_aware() -> None:

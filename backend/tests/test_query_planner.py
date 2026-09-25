@@ -77,6 +77,38 @@ def test_valid_plan_is_parsed_with_catalog_in_prompt() -> None:
     assert prompt["scope"] == {"countries": ["US"], "platform": "ios"}
 
 
+def test_planner_carries_exact_usage_from_provider() -> None:
+    class UsageClient(ScriptedClient):
+        def complete_json(self, **kwargs) -> dict[str, Any]:
+            kwargs["on_usage"](
+                {
+                    "provider": "openai",
+                    "model": "planner-model",
+                    "input_tokens": 20,
+                    "output_tokens": 5,
+                    "total_tokens": 25,
+                    "cached_input_tokens": None,
+                }
+            )
+            return super().complete_json(**kwargs)
+
+    result = plan_question(
+        "Why is cancellation hard?",
+        CATALOG,
+        client=UsageClient([_valid_plan()]),
+        settings=_settings(),
+    )
+
+    assert result.usage == {
+        "provider": "openai",
+        "model": "planner-model",
+        "input_tokens": 20,
+        "output_tokens": 5,
+        "total_tokens": 25,
+        "cached_input_tokens": None,
+    }
+
+
 def test_malformed_output_retries_once_then_falls_back() -> None:
     client = ScriptedClient(
         [

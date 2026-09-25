@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -185,3 +185,4 @@ class PlannerResult(BaseModel):
     model: str
     used_fallback: bool = False
     limitations: list[str] = Field(default_factory=list)
+    usage: dict[str, Any] | None = None

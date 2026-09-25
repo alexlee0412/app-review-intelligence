@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.models import EMBEDDING_DIMENSION, QueryRun
+from app.models.query_run import RUN_KIND_SEARCH
 from app.repositories.review_search_repository import (
     MAX_CANDIDATE_LIMIT,
     SearchQueryResult,
@@ -187,6 +188,7 @@ def test_query_run_is_populated_without_embedding_vector(
     query_run = session.added[0]
     assert isinstance(query_run, QueryRun)
     assert query_run.query_run_id == response.query_run_id
+    assert query_run.run_kind == RUN_KIND_SEARCH
     assert query_run.user_query == "cancel"
     assert query_run.parsed_intent is None
     assert query_run.applied_filters == {

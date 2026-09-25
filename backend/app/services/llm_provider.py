@@ -6,7 +6,7 @@ import hashlib
 import json
 import logging
 import time
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from pydantic import SecretStr
 
@@ -27,6 +27,7 @@ class LLMClient(Protocol):
         user: str,
         schema: dict[str, Any],
         max_output_tokens: int,
+        on_usage: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -145,6 +146,7 @@ class FakeLLMClient:
         user: str,
         schema: dict[str, Any],
         max_output_tokens: int,
+        on_usage: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         seed = json.dumps(
             {
@@ -230,6 +232,7 @@ class OpenAILLMClient:
         user: str,
         schema: dict[str, Any],
         max_output_tokens: int,
+        on_usage: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         response: Any | None = None
         for attempt in range(5):
@@ -272,6 +275,40 @@ class OpenAILLMClient:
 
         if response is None:
             raise LLMError("LLM provider request failed")
+
+        usage = getattr(response, "usage", None)
+        if on_usage is not None and usage is not None:
+            input_tokens = getattr(usage, "prompt_tokens", None)
+            if input_tokens is None:
+                input_tokens = getattr(usage, "input_tokens", None)
+            output_tokens = getattr(usage, "completion_tokens", None)
+            if output_tokens is None:
+                output_tokens = getattr(usage, "output_tokens", None)
+            total_tokens = getattr(usage, "total_tokens", None)
+            if (
+                total_tokens is None
+                and input_tokens is not None
+                and output_tokens is not None
+            ):
+                total_tokens = input_tokens + output_tokens
+            prompt_details = getattr(usage, "prompt_tokens_details", None)
+            if prompt_details is None:
+                prompt_details = getattr(usage, "input_tokens_details", None)
+            cached_input_tokens = (
+                getattr(prompt_details, "cached_tokens", None)
+                if prompt_details is not None
+                else None
+            )
+            on_usage(
+                {
+                    "provider": self.name,
+                    "model": model,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens,
+                    "cached_input_tokens": cached_input_tokens,
+                }
+            )
 
         # A reasoning model can spend the whole token budget before emitting output,
         # which arrives as a successful response with empty content. Reported as

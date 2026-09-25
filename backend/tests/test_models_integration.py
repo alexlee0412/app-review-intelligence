@@ -41,6 +41,21 @@ def test_core_tables_exist(session: Session) -> None:
     assert {"apps", "reviews", "query_runs"} <= table_names
 
 
+def test_query_run_instrumentation_columns_exist(session: Session) -> None:
+    columns = {
+        column["name"]
+        for column in inspect(session.get_bind()).get_columns("query_runs")
+    }
+    assert {
+        "run_kind",
+        "stage_latency_ms",
+        "model_usage",
+        "grounding_outcomes",
+        "retrieval_outcomes",
+        "run_versions",
+    } <= columns
+
+
 def test_vector_extension_installed(session: Session) -> None:
     installed = session.execute(
         text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
