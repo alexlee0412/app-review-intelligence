@@ -1,0 +1,32 @@
+[
+  {
+    "id": "epik-problems",
+    "question": "What problems do reviewers report with EPIK?",
+    "shape": "app_specific_problems"
+  },
+  {
+    "id": "subscription-themes",
+    "question": "What subscription problems appear across the apps?",
+    "shape": "cross_app_theme"
+  },
+  {
+    "id": "pricing-paywalls",
+    "question": "What do reviewers say about pricing and paywalls?",
+    "shape": "pricing_paywall"
+  },
+  {
+    "id": "performance-crashes",
+    "question": "What performance and crash problems do reviewers report?",
+    "shape": "insufficiency"
+  },
+  {
+    "id": "complaint-trend",
+    "question": "How have complaint volumes changed month over month?",
+    "shape": "trend_analysis"
+  },
+  {
+    "id": "multi-app-summary",
+    "question": "Summarize the main issues reviewers report across all apps.",
+    "shape": "broad_multi_app_summary"
+  }
+]
