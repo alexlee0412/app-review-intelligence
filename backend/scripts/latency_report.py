@@ -123,29 +123,32 @@ def _variance_breakdown(
 
 
 def _stage_statistics(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    total_values = [
-        value
-        for record in records
-        if (value := _numeric(record["latency"].get("total"))) is not None
-    ]
-    mean_total = statistics.mean(total_values) if total_values else None
     stages: dict[str, dict[str, Any]] = {}
     for stage in STAGES:
         values_by_question: dict[str, list[float]] = defaultdict(list)
         values: list[float] = []
+        paired_values: list[float] = []
+        paired_totals: list[float] = []
         for record in records:
             value = _numeric(record["latency"].get(stage))
             if value is None:
                 continue
             values.append(value)
             values_by_question[record["question_id"]].append(value)
+            total = _numeric(record["latency"].get("total"))
+            if total is not None:
+                paired_values.append(value)
+                paired_totals.append(total)
         summary = _statistics(values)
-        mean = summary["mean"]
+        paired_total_mean = (
+            statistics.mean(paired_totals) if paired_totals else None
+        )
         summary["share_of_mean_total"] = (
-            mean / mean_total
-            if isinstance(mean, (int, float)) and mean_total not in (None, 0)
+            statistics.mean(paired_values) / paired_total_mean
+            if paired_values and paired_total_mean not in (None, 0)
             else None
         )
+        summary["share_n"] = len(paired_values)
         within, between = _variance_breakdown(values_by_question)
         summary["within_question_spread"] = within
         summary["between_question_spread"] = between
@@ -211,13 +214,20 @@ def _cold_start(records: list[dict[str, Any]]) -> dict[str, Any]:
             first_slower += 1
 
     compared = len(first_values)
-    systematically_slower = first_slower == compared if compared else None
+    systematically_slower = first_slower > compared / 2 if compared else None
+    verdict_threshold = "strict majority (>50%)"
     if systematically_slower is None:
         note = "Cold-start comparison is unavailable."
     elif systematically_slower:
-        note = "Repetition #1 was slower for every comparable question."
+        note = (
+            "Repetition #1 was slower for a majority of comparable questions "
+            "(threshold: more than 50%)."
+        )
     else:
-        note = "Repetition #1 was not systematically slower across questions."
+        note = (
+            "Repetition #1 was slower for no more than half of comparable questions "
+            "(threshold: more than 50%)."
+        )
     return {
         "questions_compared": compared,
         "questions_with_slower_first_run": first_slower,
@@ -228,6 +238,7 @@ def _cold_start(records: list[dict[str, Any]]) -> dict[str, Any]:
             statistics.mean(later_values) if later_values else None
         ),
         "systematically_slower": systematically_slower,
+        "verdict_threshold": verdict_threshold,
         "note": note,
     }
 
@@ -327,7 +338,8 @@ def _print_report(report: dict[str, Any]) -> None:
             f"median={_format_number(stats['median'])} "
             f"min={_format_number(stats['min'])} max={_format_number(stats['max'])} "
             f"stdev={_format_number(stats['stdev'])} "
-            f"share={_format_number(stats['share_of_mean_total'])}"
+            f"share={_format_number(stats['share_of_mean_total'])} "
+            f"share_n={stats['share_n']}"
         )
         print(
             "  within-question mean stdev="
@@ -363,7 +375,8 @@ def _print_report(report: dict[str, Any]) -> None:
     print(
         f"Compared questions: {cold_start['questions_compared']} · "
         "slower first repetitions: "
-        f"{cold_start['questions_with_slower_first_run']} · "
+        f"{cold_start['questions_with_slower_first_run']} of "
+        f"{cold_start['questions_compared']} · "
         f"first mean: {_format_number(cold_start['first_repetition_mean'])} · "
         f"later mean: {_format_number(cold_start['later_repetitions_mean'])}"
     )

@@ -17,6 +17,10 @@ DEFAULT_OUTPUT_PATH = Path("latency-baseline-manifest.json")
 EXPECTED_SINGLE_CALL_SHAPES = frozenset({"insufficiency", "trend_analysis"})
 
 
+class ManifestError(ValueError):
+    """Raised when an existing baseline manifest cannot be resumed safely."""
+
+
 def _positive_integer(value: str) -> int:
     parsed = int(value)
     if parsed < 1:
@@ -33,6 +37,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUTPUT_PATH)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=_positive_integer)
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing manifest instead of resuming recorded runs.",
+    )
     return parser
 
 
@@ -135,6 +144,61 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+def _load_existing_manifest(path: Path, questions_hash: str) -> dict[str, Any]:
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise ManifestError(
+            "existing manifest is corrupt or unreadable; use --overwrite to start clean"
+        ) from None
+
+    if not isinstance(manifest, dict):
+        raise ManifestError(
+            "existing manifest is corrupt; use --overwrite to start clean"
+        )
+    question_set = manifest.get("question_set")
+    if not isinstance(question_set, dict) or not isinstance(
+        question_set.get("sha256"), str
+    ):
+        raise ManifestError(
+            "existing manifest is corrupt; use --overwrite to start clean"
+        )
+    if question_set["sha256"] != questions_hash:
+        raise ManifestError(
+            "existing manifest uses a different question set; "
+            "use --overwrite to start clean"
+        )
+    runs = manifest.get("runs")
+    if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION or not isinstance(
+        runs, list
+    ):
+        raise ManifestError(
+            "existing manifest is corrupt; use --overwrite to start clean"
+        )
+
+    pairs: set[tuple[str, int]] = set()
+    for item in runs:
+        if not isinstance(item, dict):
+            raise ManifestError(
+                "existing manifest is corrupt; use --overwrite to start clean"
+            )
+        question_id = item.get("question_id")
+        repetition = item.get("repetition")
+        if (
+            not isinstance(question_id, str)
+            or not question_id
+            or isinstance(repetition, bool)
+            or not isinstance(repetition, int)
+            or repetition < 1
+            or (question_id, repetition) in pairs
+        ):
+            raise ManifestError(
+                "existing manifest is corrupt; use --overwrite to start clean"
+            )
+        pairs.add((question_id, repetition))
+    return manifest
+
+
 def run(
     args: argparse.Namespace,
     *,
@@ -156,18 +220,42 @@ def run(
     if args.dry_run:
         return 0
 
+    if args.out.exists() and not getattr(args, "overwrite", False):
+        manifest = _load_existing_manifest(args.out, questions_hash)
+    else:
+        manifest = _manifest(
+            questions_path=args.questions,
+            questions_hash=questions_hash,
+            questions=questions,
+            repetitions=args.repetitions,
+        )
+        _write_manifest(args.out, manifest)
+
+    recorded_pairs = {
+        (item["question_id"], item["repetition"]) for item in manifest["runs"]
+    }
+    pending_runs = [
+        (question, repetition)
+        for question, repetition in plan
+        if (question["id"], repetition) not in recorded_pairs
+    ]
+    if recorded_pairs:
+        print(f"Recorded runs to skip: {len(plan) - len(pending_runs)}")
+
     resolved_answerer = answerer or _answer_question
     resolved_session_factory = session_factory or _session_factory()
-    manifest = _manifest(
-        questions_path=args.questions,
-        questions_hash=questions_hash,
-        questions=questions,
-        repetitions=args.repetitions,
-    )
+    manifest["finished_at"] = None
     _write_manifest(args.out, manifest)
 
     total = len(plan)
     for position, (question, repetition) in enumerate(plan, start=1):
+        if (question["id"], repetition) in recorded_pairs:
+            print(
+                f"[{position}/{total}] {question['id']} repetition {repetition}: "
+                "skipping recorded run",
+                flush=True,
+            )
+            continue
         print(
             f"[{position}/{total}] {question['id']} repetition {repetition}",
             flush=True,
@@ -202,6 +290,9 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         return run(args)
+    except ManifestError as exc:
+        print(f"fatal: {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(
             f"fatal: unable to run latency baseline ({type(exc).__name__})",

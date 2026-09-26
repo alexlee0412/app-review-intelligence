@@ -47,6 +47,7 @@ def _args(questions: Path, output: Path, **overrides: object) -> Namespace:
         "out": output,
         "dry_run": False,
         "limit": None,
+        "overwrite": False,
     }
     values.update(overrides)
     return Namespace(**values)
@@ -176,6 +177,148 @@ def test_limit_caps_total_runs(tmp_path: Path) -> None:
 
     assert calls == ["Prompt text must not be persisted."] * 2
     assert len(json.loads(output.read_text())["runs"]) == 2
+
+
+def _existing_manifest(
+    questions_path: Path,
+    *,
+    repetitions: int = 1,
+) -> dict[str, object]:
+    questions, questions_hash = latency_baseline._load_questions(questions_path)
+    return latency_baseline._manifest(
+        questions_path=questions_path,
+        questions_hash=questions_hash,
+        questions=questions,
+        repetitions=repetitions,
+    )
+
+
+def test_resume_skips_recorded_pair_and_preserves_query_run_id(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    output = tmp_path / "manifest.json"
+    previous_id = uuid.uuid4()
+    next_id = uuid.uuid4()
+    manifest = _existing_manifest(questions)
+    manifest["runs"] = [
+        {
+            "question_id": "first",
+            "repetition": 1,
+            "query_run_id": str(previous_id),
+            "ok": True,
+        }
+    ]
+    output.write_text(json.dumps(manifest), encoding="utf-8")
+    calls: list[str] = []
+
+    def answerer(session: object, question: str) -> object:
+        calls.append(question)
+        return SimpleNamespace(query_run_id=next_id)
+
+    assert (
+        latency_baseline.run(
+            _args(questions, output),
+            answerer=answerer,
+            session_factory=SessionContext,
+        )
+        == 0
+    )
+
+    final_manifest = json.loads(output.read_text(encoding="utf-8"))
+    assert calls == ["Another private question."]
+    assert [item["query_run_id"] for item in final_manifest["runs"]] == [
+        str(previous_id),
+        str(next_id),
+    ]
+    assert "skipping recorded run" in capsys.readouterr().out
+
+
+def test_overwrite_starts_clean(tmp_path: Path) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    output = tmp_path / "manifest.json"
+    previous_id = uuid.uuid4()
+    manifest = _existing_manifest(questions)
+    manifest["runs"] = [
+        {
+            "question_id": "first",
+            "repetition": 1,
+            "query_run_id": str(previous_id),
+            "ok": True,
+        }
+    ]
+    output.write_text(json.dumps(manifest), encoding="utf-8")
+    calls: list[str] = []
+
+    def answerer(session: object, question: str) -> object:
+        calls.append(question)
+        return SimpleNamespace(query_run_id=uuid.uuid4())
+
+    assert (
+        latency_baseline.run(
+            _args(questions, output, overwrite=True),
+            answerer=answerer,
+            session_factory=SessionContext,
+        )
+        == 0
+    )
+
+    final_manifest = json.loads(output.read_text(encoding="utf-8"))
+    assert calls == [
+        "Prompt text must not be persisted.",
+        "Another private question.",
+    ]
+    assert str(previous_id) not in {
+        item["query_run_id"] for item in final_manifest["runs"]
+    }
+
+
+def test_resume_refuses_different_question_set(tmp_path: Path) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    other_questions = tmp_path / "other-questions.json"
+    other_questions.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "other",
+                    "question": "Different question set.",
+                    "shape": "other_shape",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "manifest.json"
+    output.write_text(
+        json.dumps(_existing_manifest(other_questions)), encoding="utf-8"
+    )
+
+    with pytest.raises(
+        latency_baseline.ManifestError, match="different question set"
+    ):
+        latency_baseline.run(
+            _args(questions, output),
+            answerer=lambda *_: pytest.fail("answerer must not run"),
+            session_factory=SessionContext,
+        )
+
+
+def test_resume_refuses_corrupt_manifest_readably(tmp_path: Path) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    output = tmp_path / "manifest.json"
+    output.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(latency_baseline.ManifestError, match="corrupt"):
+        latency_baseline.run(
+            _args(questions, output),
+            answerer=lambda *_: pytest.fail("answerer must not run"),
+            session_factory=SessionContext,
+        )
+
+
+def test_parser_accepts_explicit_overwrite() -> None:
+    args = latency_baseline._parser().parse_args(["--overwrite"])
+    assert args.overwrite is True
 
 
 def test_committed_question_set_covers_fixed_pipeline_shapes() -> None:

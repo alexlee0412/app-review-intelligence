@@ -78,6 +78,7 @@ def test_statistics_and_variance_sources_are_reported_correctly() -> None:
     assert between["question_count"] == 2
     assert math.isclose(between["stdev_of_means"], math.sqrt(200), rel_tol=1e-9)
     assert math.isclose(planner["share_of_mean_total"], 21 / 201)
+    assert planner["share_n"] == 4
 
 
 def test_skipped_synthesis_and_single_value_stdev_are_explicit() -> None:
@@ -94,7 +95,11 @@ def test_skipped_synthesis_and_single_value_stdev_are_explicit() -> None:
         "first_repetition_mean": 200,
         "later_repetitions_mean": 202,
         "systematically_slower": False,
-        "note": "Repetition #1 was not systematically slower across questions.",
+        "verdict_threshold": "strict majority (>50%)",
+        "note": (
+            "Repetition #1 was slower for no more than half of comparable questions "
+            "(threshold: more than 50%)."
+        ),
     }
 
 
@@ -169,6 +174,7 @@ def test_empty_manifest_has_undefined_statistics() -> None:
         "max": None,
         "stdev": None,
         "share_of_mean_total": None,
+        "share_n": 0,
         "within_question_spread": {
             "questions_with_repeats": 0,
             "mean_stdev": None,
@@ -179,6 +185,93 @@ def test_empty_manifest_has_undefined_statistics() -> None:
         },
     }
     assert report["cold_start"]["systematically_slower"] is None
+
+
+def test_partial_stage_share_uses_paired_total_population() -> None:
+    ids = [str(uuid.uuid4()) for _ in range(12)]
+    manifest = {
+        "schema_version": "latency-baseline-v1",
+        "runs": [_run(f"q{index}", 1, value) for index, value in enumerate(ids)],
+    }
+    rows = {}
+    for index, query_run_id in enumerate(ids):
+        synthesis_present = index < 9
+        rows[query_run_id] = SimpleNamespace(
+            stage_latency_ms={
+                "planner": 1,
+                "query_embedding": 1,
+                "analytics": 1,
+                "retrieval": 1,
+                "synthesis": 100 if synthesis_present else None,
+                "validation": 1,
+                "total": 110 if synthesis_present else 10,
+            },
+            model_usage=None,
+        )
+
+    report = latency_report.build_report(manifest, rows)
+    synthesis = report["stages"]["synthesis"]
+
+    assert synthesis["n"] == 9
+    assert synthesis["share_n"] == 9
+    assert math.isclose(synthesis["share_of_mean_total"], 100 / 110)
+    assert synthesis["share_of_mean_total"] <= 1.0
+    component_share = sum(
+        report["stages"][stage]["share_of_mean_total"]
+        for stage in latency_report.STAGES
+        if stage != "total"
+    )
+    assert component_share <= 1.0
+
+
+def _cold_start_records(
+    *,
+    question_count: int,
+    slower_first_count: int,
+) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for index in range(question_count):
+        first = 20 if index < slower_first_count else 5
+        records.extend(
+            [
+                {
+                    "question_id": f"q{index}",
+                    "repetition": 1,
+                    "latency": {"total": first},
+                    "model_usage": None,
+                },
+                {
+                    "question_id": f"q{index}",
+                    "repetition": 2,
+                    "latency": {"total": 10},
+                    "model_usage": None,
+                },
+            ]
+        )
+    return records
+
+
+def test_clear_majority_of_slower_first_runs_is_reported() -> None:
+    cold_start = latency_report._cold_start(
+        _cold_start_records(question_count=12, slower_first_count=11)
+    )
+
+    assert cold_start["questions_with_slower_first_run"] == 11
+    assert cold_start["questions_compared"] == 12
+    assert cold_start["systematically_slower"] is True
+    assert "not systematically slower" not in cold_start["note"]
+    assert "more than 50%" in cold_start["note"]
+
+
+def test_clear_minority_of_slower_first_runs_is_reported() -> None:
+    cold_start = latency_report._cold_start(
+        _cold_start_records(question_count=12, slower_first_count=3)
+    )
+
+    assert cold_start["questions_with_slower_first_run"] == 3
+    assert cold_start["questions_compared"] == 12
+    assert cold_start["systematically_slower"] is False
+    assert "no more than half" in cold_start["note"]
 
 
 def test_empty_manifest_run_does_not_load_database(
