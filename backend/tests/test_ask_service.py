@@ -74,10 +74,11 @@ class StubClient:
         }
 
 
-def _settings() -> object:
+def _settings(*, reasoning_effort: str | None = None) -> object:
     return SimpleNamespace(
         planner_model="planner-model",
         synthesizer_model="answer-model",
+        synthesizer_reasoning_effort=reasoning_effort,
         llm_max_output_tokens=500,
     )
 
@@ -250,6 +251,29 @@ def test_metrics_are_copied_from_aggregates_not_model_output(
     assert query_run.parsed_intent["intent"] == "app_comparison"
     assert query_run.sql_template == "SELECT parameterized"
     assert session.commits == 1
+
+
+def test_reasoning_effort_is_forwarded_to_synthesizer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan = QueryPlan(
+        intent=Intent.REVIEW_SUMMARY,
+        semantic_query="cancellation",
+        app_ids=["app-one"],
+    )
+    _install_bundle(monkeypatch, count=3)
+    client = StubClient()
+
+    answer_question(
+        FakeSession(),  # type: ignore[arg-type]
+        "Summarize cancellation reviews",
+        planner=_planner(plan),
+        embedder=_embedder(),
+        client=client,
+        settings=_settings(reasoning_effort="high"),  # type: ignore[arg-type]
+    )
+
+    assert client.calls[0]["reasoning_effort"] == "high"
 
 
 def test_nonproduction_providers_surface_warnings(

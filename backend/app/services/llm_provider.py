@@ -28,6 +28,7 @@ class LLMClient(Protocol):
         schema: dict[str, Any],
         max_output_tokens: int,
         on_usage: Callable[[dict[str, Any]], None] | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -147,6 +148,7 @@ class FakeLLMClient:
         schema: dict[str, Any],
         max_output_tokens: int,
         on_usage: Callable[[dict[str, Any]], None] | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         seed = json.dumps(
             {
@@ -233,8 +235,14 @@ class OpenAILLMClient:
         schema: dict[str, Any],
         max_output_tokens: int,
         on_usage: Callable[[dict[str, Any]], None] | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         response: Any | None = None
+        reasoning_kwargs = (
+            {"reasoning_effort": reasoning_effort}
+            if reasoning_effort is not None
+            else {}
+        )
         for attempt in range(5):
             try:
                 response = self._client.chat.completions.create(
@@ -252,6 +260,7 @@ class OpenAILLMClient:
                         },
                     },
                     max_completion_tokens=max_output_tokens,
+                    **reasoning_kwargs,
                 )
                 break
             except Exception as exc:

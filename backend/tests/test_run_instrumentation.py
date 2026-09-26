@@ -116,6 +116,7 @@ def _settings() -> object:
     return SimpleNamespace(
         planner_model="planner-model",
         synthesizer_model="answer-model",
+        synthesizer_reasoning_effort=None,
         llm_max_output_tokens=500,
     )
 

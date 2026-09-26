@@ -44,7 +44,9 @@ def test_fake_client_is_deterministic_and_not_production_grade() -> None:
         "schema": SIMPLE_SCHEMA,
         "max_output_tokens": 100,
     }
-    assert client.complete_json(**arguments) == client.complete_json(**arguments)
+    baseline = client.complete_json(**arguments)
+    assert baseline == client.complete_json(**arguments)
+    assert baseline == client.complete_json(**arguments, reasoning_effort="high")
     assert client.name == "fake"
     assert client.is_production_grade is False
 
@@ -125,6 +127,23 @@ def test_openai_requests_strict_json_and_retries_429(monkeypatch) -> None:
     strict_schema = response_format["json_schema"]["schema"]
     assert strict_schema["additionalProperties"] is False
     assert strict_schema["required"] == ["value"]
+    assert "reasoning_effort" not in completions.calls[-1]
+
+
+def test_openai_forwards_reasoning_effort_when_set() -> None:
+    completions = _Completions([json.dumps({"value": "ok"})])
+    client = _openai_client(completions)
+
+    client.complete_json(
+        model="test-model",
+        system="system",
+        user="user",
+        schema=SIMPLE_SCHEMA,
+        max_output_tokens=100,
+        reasoning_effort="medium",
+    )
+
+    assert completions.calls[0]["reasoning_effort"] == "medium"
 
 
 def test_openai_reports_normalized_provider_usage() -> None:

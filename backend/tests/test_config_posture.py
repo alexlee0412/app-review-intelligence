@@ -100,6 +100,18 @@ def test_unknown_embedding_provider_is_rejected() -> None:
         )
 
 
+def test_invalid_synthesizer_reasoning_effort_is_rejected() -> None:
+    with pytest.raises(
+        ValidationError, match="APP_SYNTHESIZER_REASONING_EFFORT.*low.*medium.*high"
+    ):
+        Settings(
+            _env_file=None,
+            database_url=REMOTE_DATABASE_URL,
+            synthesizer_reasoning_effort="extreme",
+            **BASE_SETTINGS,
+        )
+
+
 def test_production_openai_requires_key_without_leaking_inputs() -> None:
     password = "private-password-placeholder"
     token = "private-token-placeholder"

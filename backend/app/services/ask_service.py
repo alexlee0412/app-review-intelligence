@@ -439,6 +439,7 @@ def answer_question(
             client=resolved_client,
             model=resolved_settings.synthesizer_model,
             max_output_tokens=resolved_settings.llm_max_output_tokens,
+            reasoning_effort=resolved_settings.synthesizer_reasoning_effort,
         )
         synthesis = synthesis_result.output
         synthesis_limitations = synthesis_result.limitations

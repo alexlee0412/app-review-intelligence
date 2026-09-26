@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     llm_provider: str = "fake"
     planner_model: str = "gpt-5-mini"
     synthesizer_model: str = "gpt-5"
+    synthesizer_reasoning_effort: str | None = None
     # Reasoning models routinely spend ~1 minute on a synthesis call, so a 60s
     # budget fails intermittently rather than cleanly.
     llm_timeout_seconds: int = 180
@@ -82,6 +83,12 @@ class Settings(BaseSettings):
 
         if self.llm_provider not in {"fake", "openai"}:
             raise ValueError("APP_LLM_PROVIDER must be either 'fake' or 'openai'")
+
+        if self.synthesizer_reasoning_effort not in {None, "low", "medium", "high"}:
+            raise ValueError(
+                "APP_SYNTHESIZER_REASONING_EFFORT must be one of "
+                "'low', 'medium', or 'high'"
+            )
 
         if self.app_environment.lower() not in {"development", "test"}:
             # Checked first: pointing production at a local database is the more

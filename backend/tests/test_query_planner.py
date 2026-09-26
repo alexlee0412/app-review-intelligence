@@ -23,12 +23,13 @@ CATALOG = [
 ]
 
 
-def _settings() -> Settings:
+def _settings(*, reasoning_effort: str | None = None) -> Settings:
     return Settings(
         _env_file=None,
         app_environment="test",
         database_url=DATABASE_URL,
         llm_provider="fake",
+        synthesizer_reasoning_effort=reasoning_effort,
     )
 
 
@@ -75,6 +76,22 @@ def test_valid_plan_is_parsed_with_catalog_in_prompt() -> None:
         "app-two",
     }
     assert prompt["scope"] == {"countries": ["US"], "platform": "ios"}
+
+
+@pytest.mark.parametrize("reasoning_effort", [None, "high"])
+def test_planner_never_receives_synthesizer_reasoning_effort(
+    reasoning_effort: str | None,
+) -> None:
+    client = ScriptedClient([_valid_plan()])
+
+    plan_question(
+        "Why is cancellation hard?",
+        CATALOG,
+        client=client,
+        settings=_settings(reasoning_effort=reasoning_effort),
+    )
+
+    assert "reasoning_effort" not in client.calls[0]
 
 
 def test_planner_carries_exact_usage_from_provider() -> None:

@@ -316,6 +316,7 @@ def synthesize_answer(
     client: Any,
     model: str,
     max_output_tokens: int,
+    reasoning_effort: str | None = None,
 ) -> SynthesisResult:
     """Make one structured completion and discard unsupported findings."""
     usage_records: list[dict[str, Any]] = []
@@ -328,6 +329,7 @@ def synthesize_answer(
             schema=SynthesisOutput.model_json_schema(),
             max_output_tokens=max_output_tokens,
             on_usage=usage_records.append,
+            reasoning_effort=reasoning_effort,
         )
     except Exception as exc:
         synthesis_latency_ms = (time.perf_counter() - synthesis_started) * 1000
