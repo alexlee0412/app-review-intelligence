@@ -42,6 +42,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Replace an existing manifest instead of resuming recorded runs.",
     )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry failed recorded runs while preserving successful runs.",
+    )
     return parser
 
 
@@ -205,6 +210,10 @@ def run(
     answerer: Callable[[object, str], object] | None = None,
     session_factory: Callable[[], Any] | None = None,
 ) -> int:
+    retry_failed = getattr(args, "retry_failed", False)
+    if getattr(args, "overwrite", False) and retry_failed:
+        raise ManifestError("--retry-failed cannot be used with --overwrite")
+
     questions, questions_hash = _load_questions(args.questions)
     plan = _execution_plan(questions, args.repetitions, args.limit)
     print(f"Questions: {len(questions)}")
@@ -231,16 +240,29 @@ def run(
         )
         _write_manifest(args.out, manifest)
 
-    recorded_pairs = {
-        (item["question_id"], item["repetition"]) for item in manifest["runs"]
+    record_indexes = {
+        (item["question_id"], item["repetition"]): index
+        for index, item in enumerate(manifest["runs"])
     }
+    retry_pairs = {
+        pair
+        for pair, index in record_indexes.items()
+        if retry_failed and manifest["runs"][index].get("ok") is False
+    }
+    skipped_pairs = set(record_indexes) - retry_pairs
     pending_runs = [
         (question, repetition)
         for question, repetition in plan
-        if (question["id"], repetition) not in recorded_pairs
+        if (question["id"], repetition) not in skipped_pairs
     ]
-    if recorded_pairs:
+    if record_indexes:
         print(f"Recorded runs to skip: {len(plan) - len(pending_runs)}")
+    if retry_pairs:
+        retry_count = sum(
+            (question["id"], repetition) in retry_pairs
+            for question, repetition in plan
+        )
+        print(f"Failed runs to retry: {retry_count}")
 
     resolved_answerer = answerer or _answer_question
     resolved_session_factory = session_factory or _session_factory()
@@ -249,17 +271,25 @@ def run(
 
     total = len(plan)
     for position, (question, repetition) in enumerate(plan, start=1):
-        if (question["id"], repetition) in recorded_pairs:
+        pair = (question["id"], repetition)
+        if pair in skipped_pairs:
             print(
                 f"[{position}/{total}] {question['id']} repetition {repetition}: "
                 "skipping recorded run",
                 flush=True,
             )
             continue
-        print(
-            f"[{position}/{total}] {question['id']} repetition {repetition}",
-            flush=True,
-        )
+        if pair in retry_pairs:
+            print(
+                f"[{position}/{total}] {question['id']} repetition {repetition}: "
+                "retrying failed run",
+                flush=True,
+            )
+        else:
+            print(
+                f"[{position}/{total}] {question['id']} repetition {repetition}",
+                flush=True,
+            )
         record: dict[str, Any] = {
             "question_id": question["id"],
             "repetition": repetition,
@@ -278,7 +308,10 @@ def run(
                 file=sys.stderr,
                 flush=True,
             )
-        manifest["runs"].append(record)
+        if pair in retry_pairs:
+            manifest["runs"][record_indexes[pair]] = record
+        else:
+            manifest["runs"].append(record)
         _write_manifest(args.out, manifest)
 
     manifest["finished_at"] = _now()

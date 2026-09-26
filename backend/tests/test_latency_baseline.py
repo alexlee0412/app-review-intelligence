@@ -48,6 +48,7 @@ def _args(questions: Path, output: Path, **overrides: object) -> Namespace:
         "dry_run": False,
         "limit": None,
         "overwrite": False,
+        "retry_failed": False,
     }
     values.update(overrides)
     return Namespace(**values)
@@ -234,6 +235,162 @@ def test_resume_skips_recorded_pair_and_preserves_query_run_id(
     assert "skipping recorded run" in capsys.readouterr().out
 
 
+def test_resume_without_retry_failed_skips_failed_pair(tmp_path: Path) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    output = tmp_path / "manifest.json"
+    next_id = uuid.uuid4()
+    manifest = _existing_manifest(questions)
+    manifest["runs"] = [
+        {
+            "question_id": "first",
+            "repetition": 1,
+            "query_run_id": None,
+            "ok": False,
+            "error_type": "RuntimeError",
+        }
+    ]
+    output.write_text(json.dumps(manifest), encoding="utf-8")
+    calls: list[str] = []
+
+    def answerer(session: object, question: str) -> object:
+        calls.append(question)
+        return SimpleNamespace(query_run_id=next_id)
+
+    assert (
+        latency_baseline.run(
+            _args(questions, output),
+            answerer=answerer,
+            session_factory=SessionContext,
+        )
+        == 0
+    )
+
+    final_manifest = json.loads(output.read_text(encoding="utf-8"))
+    assert calls == ["Another private question."]
+    assert final_manifest["runs"][0] == manifest["runs"][0]
+
+
+def test_retry_failed_replaces_failure_and_preserves_success(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    output = tmp_path / "manifest.json"
+    successful_id = uuid.uuid4()
+    retried_id = uuid.uuid4()
+    manifest = _existing_manifest(questions)
+    manifest["runs"] = [
+        {
+            "question_id": "first",
+            "repetition": 1,
+            "query_run_id": None,
+            "ok": False,
+            "error_type": "RuntimeError",
+        },
+        {
+            "question_id": "second",
+            "repetition": 1,
+            "query_run_id": str(successful_id),
+            "ok": True,
+        },
+    ]
+    output.write_text(json.dumps(manifest), encoding="utf-8")
+    calls: list[str] = []
+
+    def answerer(session: object, question: str) -> object:
+        calls.append(question)
+        return SimpleNamespace(query_run_id=retried_id)
+
+    assert (
+        latency_baseline.run(
+            _args(questions, output, retry_failed=True),
+            answerer=answerer,
+            session_factory=SessionContext,
+        )
+        == 0
+    )
+
+    final_manifest = json.loads(output.read_text(encoding="utf-8"))
+    assert calls == ["Prompt text must not be persisted."]
+    assert final_manifest["runs"] == [
+        {
+            "question_id": "first",
+            "repetition": 1,
+            "query_run_id": str(retried_id),
+            "ok": True,
+        },
+        {
+            "question_id": "second",
+            "repetition": 1,
+            "query_run_id": str(successful_id),
+            "ok": True,
+        },
+    ]
+    assert len(
+        {
+            (item["question_id"], item["repetition"])
+            for item in final_manifest["runs"]
+        }
+    ) == len(final_manifest["runs"])
+    rendered = capsys.readouterr().out
+    assert "retrying failed run" in rendered
+    assert "second repetition 1: skipping recorded run" in rendered
+
+
+def test_retry_failed_replaces_failure_with_new_failure(tmp_path: Path) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    output = tmp_path / "manifest.json"
+    successful_id = uuid.uuid4()
+    manifest = _existing_manifest(questions)
+    manifest["runs"] = [
+        {
+            "question_id": "first",
+            "repetition": 1,
+            "query_run_id": None,
+            "ok": False,
+            "error_type": "RuntimeError",
+        },
+        {
+            "question_id": "second",
+            "repetition": 1,
+            "query_run_id": str(successful_id),
+            "ok": True,
+        },
+    ]
+    output.write_text(json.dumps(manifest), encoding="utf-8")
+    calls: list[str] = []
+
+    def answerer(session: object, question: str) -> object:
+        calls.append(question)
+        raise TimeoutError("private failure detail")
+
+    assert (
+        latency_baseline.run(
+            _args(questions, output, retry_failed=True),
+            answerer=answerer,
+            session_factory=SessionContext,
+        )
+        == 0
+    )
+
+    final_manifest = json.loads(output.read_text(encoding="utf-8"))
+    assert calls == ["Prompt text must not be persisted."]
+    assert final_manifest["runs"] == [
+        {
+            "question_id": "first",
+            "repetition": 1,
+            "query_run_id": None,
+            "ok": False,
+            "error_type": "TimeoutError",
+        },
+        {
+            "question_id": "second",
+            "repetition": 1,
+            "query_run_id": str(successful_id),
+            "ok": True,
+        },
+    ]
+
+
 def test_overwrite_starts_clean(tmp_path: Path) -> None:
     questions = _questions(tmp_path / "questions.json")
     output = tmp_path / "manifest.json"
@@ -273,7 +430,10 @@ def test_overwrite_starts_clean(tmp_path: Path) -> None:
     }
 
 
-def test_resume_refuses_different_question_set(tmp_path: Path) -> None:
+@pytest.mark.parametrize("retry_failed", [False, True])
+def test_resume_refuses_different_question_set(
+    tmp_path: Path, retry_failed: bool
+) -> None:
     questions = _questions(tmp_path / "questions.json")
     other_questions = tmp_path / "other-questions.json"
     other_questions.write_text(
@@ -297,7 +457,7 @@ def test_resume_refuses_different_question_set(tmp_path: Path) -> None:
         latency_baseline.ManifestError, match="different question set"
     ):
         latency_baseline.run(
-            _args(questions, output),
+            _args(questions, output, retry_failed=retry_failed),
             answerer=lambda *_: pytest.fail("answerer must not run"),
             session_factory=SessionContext,
         )
@@ -319,6 +479,28 @@ def test_resume_refuses_corrupt_manifest_readably(tmp_path: Path) -> None:
 def test_parser_accepts_explicit_overwrite() -> None:
     args = latency_baseline._parser().parse_args(["--overwrite"])
     assert args.overwrite is True
+
+
+def test_parser_accepts_retry_failed() -> None:
+    args = latency_baseline._parser().parse_args(["--retry-failed"])
+    assert args.retry_failed is True
+
+
+def test_overwrite_and_retry_failed_are_rejected(tmp_path: Path) -> None:
+    questions = _questions(tmp_path / "questions.json")
+    output = tmp_path / "manifest.json"
+
+    with pytest.raises(
+        latency_baseline.ManifestError,
+        match="--retry-failed cannot be used with --overwrite",
+    ):
+        latency_baseline.run(
+            _args(questions, output, overwrite=True, retry_failed=True),
+            answerer=lambda *_: pytest.fail("answerer must not run"),
+            session_factory=SessionContext,
+        )
+
+    assert output.exists() is False
 
 
 def test_committed_question_set_covers_fixed_pipeline_shapes() -> None:
