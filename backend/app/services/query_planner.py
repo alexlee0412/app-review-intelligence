@@ -107,7 +107,7 @@ def plan_question(
     if plan is None:
         plan = _fallback_plan(question)
 
-    plan, scope_limitations = plan.restrict_apps_to(
+    plan, scope_limitations, dropped_app_ids = plan.restrict_apps_to(
         {entry.app_id for entry in catalog}
     )
     limitations.extend(scope_limitations)
@@ -116,5 +116,6 @@ def plan_question(
         model=settings.planner_model,
         used_fallback=used_fallback,
         limitations=limitations,
+        dropped_app_ids=dropped_app_ids,
         usage=_combine_usage(usage_records),
     )

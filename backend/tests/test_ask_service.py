@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.db import engine
 from app.models import EMBEDDING_DIMENSION, App, QueryRun, Review
 from app.models.query_run import RUN_KIND_ASK
+from app.repositories.review_search_repository import SearchQueryResult
 from app.schemas.answer import (
     AppAggregate,
     EvidenceBundle,
@@ -23,7 +24,9 @@ from app.schemas.answer import (
 from app.schemas.query_plan import Intent, PlannerResult, QueryPlan
 from app.schemas.search import AppliedFilters, QueryEmbedder, ReviewEvidence
 from app.services import ask_service
+from app.services import review_search
 from app.services.ask_service import AskOverrides, answer_question
+from app.services.embedding_service import EmbeddingConfigurationError
 
 
 class FakeResult:
@@ -246,6 +249,7 @@ def test_metrics_are_copied_from_aggregates_not_model_output(
     assert query_run.user_query == "Compare cancellation reviews"
     assert query_run.parsed_intent["intent"] == "app_comparison"
     assert query_run.sql_template == "SELECT parameterized"
+    assert session.commits == 1
 
 
 def test_nonproduction_providers_surface_warnings(
@@ -302,13 +306,20 @@ def test_app_override_accepts_name_and_drops_unknown_value(
 def test_planner_that_dropped_all_apps_cannot_widen_retrieval(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    plan = QueryPlan(intent=Intent.REVIEW_SUMMARY, semantic_query="cancellation")
+    planned = QueryPlan(
+        intent=Intent.REVIEW_SUMMARY,
+        semantic_query="cancellation",
+        app_ids=["invented"],
+    )
+    plan, limitations, dropped_app_ids = planned.restrict_apps_to({"app-one"})
+    assert limitations == [
+        "Ignored unknown app identifier 'invented'; it is not in the dataset."
+    ]
     planner_result = PlannerResult(
         plan=plan,
         model="planner-model",
-        limitations=[
-            "Ignored unknown app identifier 'invented'; it is not in the dataset."
-        ],
+        limitations=["The nonexistent app 'invented' was removed from scope."],
+        dropped_app_ids=dropped_app_ids,
     )
     captured: list[QueryPlan] = []
 
@@ -334,6 +345,117 @@ def test_planner_that_dropped_all_apps_cannot_widen_retrieval(
     assert "invented" in response.limitations[0]
 
 
+def _install_search_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        review_search,
+        "search_review_candidates",
+        lambda **kwargs: SearchQueryResult(
+            evidence=[
+                ReviewEvidence(
+                    review_id=f"review-{index}",
+                    app_id="app-one",
+                    app_name="App One",
+                    version="1.0",
+                    rating=1,
+                    country="US",
+                    created_at=datetime(2026, 7, index, tzinfo=timezone.utc),
+                    title=None,
+                    body=f"Stored review {index}",
+                    similarity=0.9,
+                )
+                for index in range(1, 4)
+            ],
+            matched_review_count=3,
+            sql_template="SELECT parameterized",
+        ),
+    )
+
+
+def test_ask_retrieval_row_is_ask_before_synthesis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_search_candidates(monkeypatch)
+    session = FakeSession()
+    plan = QueryPlan(
+        intent=Intent.REVIEW_SUMMARY,
+        semantic_query="cancellation",
+        app_ids=["app-one"],
+        top_k=3,
+    )
+
+    answer_question(
+        session,  # type: ignore[arg-type]
+        "Summarize cancellation reviews",
+        planner=_planner(plan),
+        embedder=_embedder(),
+        client=StubClient(),
+        settings=_settings(),  # type: ignore[arg-type]
+    )
+
+    query_runs = [item for item in session.added if isinstance(item, QueryRun)]
+    assert len({item.query_run_id for item in query_runs}) == 1
+    assert all(item.run_kind == RUN_KIND_ASK for item in query_runs)
+    assert session.commits == 2
+
+
+def test_failed_ask_after_retrieval_is_never_labeled_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_search_candidates(monkeypatch)
+    session = FakeSession()
+    plan = QueryPlan(
+        intent=Intent.REVIEW_SUMMARY,
+        semantic_query="cancellation",
+        app_ids=["app-one"],
+        top_k=3,
+    )
+
+    class FailingClient(StubClient):
+        def complete_json(self, **kwargs: object) -> dict[str, object]:
+            raise RuntimeError("synthesis failed")
+
+    with pytest.raises(RuntimeError, match="synthesis failed"):
+        answer_question(
+            session,  # type: ignore[arg-type]
+            "Summarize cancellation reviews",
+            planner=_planner(plan),
+            embedder=_embedder(),
+            client=FailingClient(),
+            settings=_settings(),  # type: ignore[arg-type]
+        )
+
+    query_runs = [item for item in session.added if isinstance(item, QueryRun)]
+    assert len(query_runs) == 1
+    assert query_runs[0].run_kind == RUN_KIND_ASK
+    assert session.commits == 1
+
+
+def test_default_embedder_configuration_error_remains_a_domain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan = QueryPlan(
+        intent=Intent.REVIEW_SUMMARY,
+        semantic_query="cancellation",
+        app_ids=["app-one"],
+    )
+
+    def fail_build(settings: object) -> QueryEmbedder:
+        raise EmbeddingConfigurationError("embedding configuration is unavailable")
+
+    monkeypatch.setattr(ask_service, "_build_embedder", fail_build)
+
+    with pytest.raises(
+        EmbeddingConfigurationError, match="embedding configuration is unavailable"
+    ):
+        answer_question(
+            FakeSession(),  # type: ignore[arg-type]
+            "Summarize cancellation reviews",
+            planner=_planner(plan),
+            client=StubClient(),
+            settings=_settings(),  # type: ignore[arg-type]
+        )
+
+
 def test_missing_dependencies_are_imported_only_inside_ask_service_functions() -> None:
     backend_root = Path(__file__).resolve().parents[1]
     ask_source = (backend_root / "app/services/ask_service.py").read_text()
@@ -349,6 +471,13 @@ def test_missing_dependencies_are_imported_only_inside_ask_service_functions() -
         source = (backend_root / relative_path).read_text()
         assert "app.services." + "llm_provider" not in source
         assert "app.services." + "query_planner" not in source
+
+
+def test_service_modules_do_not_import_api_modules() -> None:
+    services = Path(__file__).resolve().parents[1] / "app/services"
+    for path in services.glob("*.py"):
+        assert "from app.api" not in path.read_text(), path.name
+        assert "import app.api" not in path.read_text(), path.name
 
 
 @pytest.fixture

@@ -13,15 +13,17 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api import ask as ask_api
+from app.api.deps import get_query_embedder
 from app.core.db import get_db
 from app.main import app, create_app
 from app.schemas.answer import AnswerResponse, AnswerTrace, EvidenceItem, Finding
-from app.schemas.search import AppliedFilters, ReviewEvidence
+from app.schemas.search import AppliedFilters, QueryEmbedder, ReviewEvidence
 from app.services.llm_provider import (
     LLMConfigurationError,
     LLMError,
     LLMResponseError,
 )
+from app.services.embedding_service import EmbeddingConfigurationError
 from app.services.review_search import QueryEmbeddingError
 
 
@@ -83,6 +85,11 @@ def _answer_response() -> AnswerResponse:
 
 def _override_db(session: FakeSession) -> None:
     app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[get_query_embedder] = lambda: QueryEmbedder(
+        name="fake",
+        is_production_grade=False,
+        embed=lambda _: [0.0] * 1536,
+    )
 
 
 @pytest.fixture
@@ -99,8 +106,11 @@ def test_ask_returns_answer_contract_unchanged_and_calls_service_once(
     expected = _answer_response()
     calls: list[tuple[object, str]] = []
 
-    def answer_question(received_session: object, question: str) -> AnswerResponse:
+    def answer_question(
+        received_session: object, question: str, *, embedder: QueryEmbedder
+    ) -> AnswerResponse:
         calls.append((received_session, question))
+        assert embedder.name == "fake"
         return expected
 
     _override_db(session)
@@ -211,6 +221,27 @@ def test_ask_maps_failures_without_exposing_internal_details(
         "traceback",
     ):
         assert forbidden not in response_text
+
+
+def test_ask_embedding_configuration_failure_keeps_existing_503_contract(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_build(settings: object) -> QueryEmbedder:
+        raise EmbeddingConfigurationError("provider configuration is unavailable")
+
+    app.dependency_overrides[get_db] = lambda: FakeSession()
+    monkeypatch.setattr(
+        "app.services.embedding_service.build_query_embedder", fail_build
+    )
+
+    response = client.post(
+        "/api/v1/reviews/ask",
+        json={"question": "Why can users not cancel?"},
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Query embedding service unavailable"}
 
 
 def _internal_validation_error() -> ValidationError:

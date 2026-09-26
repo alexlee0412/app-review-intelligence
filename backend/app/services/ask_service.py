@@ -12,7 +12,6 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_query_embedder
 from app.core.config import Settings, get_settings
 from app.models import App, QueryRun
 from app.models.query_run import RUN_KIND_ASK, SCHEMA_VERSION
@@ -94,6 +93,12 @@ def _build_client(settings: Settings) -> Any:
     from app.services.llm_provider import build_llm_client
 
     return build_llm_client(settings)
+
+
+def _build_embedder(settings: Settings) -> QueryEmbedder:
+    from app.services.embedding_service import build_query_embedder
+
+    return build_query_embedder(settings)
 
 
 def _default_planner(
@@ -360,12 +365,11 @@ def answer_question(
     plan, override_limitations, empty_override_scope = _apply_overrides(
         planner_result.plan, catalog, overrides
     )
-    planner_dropped_all_apps = plan.app_ids is None and any(
-        limitation.startswith("Ignored unknown app identifier ")
-        for limitation in planner_result.limitations
+    planner_dropped_all_apps = (
+        plan.app_ids is None and bool(planner_result.dropped_app_ids)
     )
     had_planned_apps = plan.app_ids is not None
-    plan, restriction_limitations = plan.restrict_apps_to(
+    plan, restriction_limitations, _ = plan.restrict_apps_to(
         {entry.app_id for entry in catalog}
     )
     empty_app_scope = (
@@ -378,7 +382,7 @@ def answer_question(
             update={"needs_semantic_search": False, "needs_aggregation": False}
         )
 
-    resolved_embedder = embedder or get_query_embedder()
+    resolved_embedder = embedder or _build_embedder(resolved_settings)
     tracking_session = _TrackingSession(session)
     bundle = build_evidence(
         tracking_session,  # type: ignore[arg-type]

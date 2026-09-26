@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.models.query_run import RUN_KIND_ASK
 from app.schemas.answer import (
     MIN_EVIDENCE_FOR_SYNTHESIS,
     AppAggregate,
@@ -69,6 +70,7 @@ def build_evidence(
                 top_k=plan.top_k,
             ),
             embedder,
+            run_kind=RUN_KIND_ASK,
         )
         applied_filters = search_response.applied_filters
         total_candidates = search_response.matched_review_count

@@ -19,6 +19,7 @@ from pydantic import SecretStr
 
 from app.core.config import Settings
 from app.models.review import EMBEDDING_DIMENSION
+from app.schemas.search import QueryEmbedder
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,7 @@ class OpenAIEmbeddingProvider:
         *,
         model: str = "text-embedding-3-small",
         batch_size: int = 128,
+        timeout_seconds: int = 60,
         client: Any | None = None,
     ) -> None:
         if api_key is None:
@@ -114,6 +116,10 @@ class OpenAIEmbeddingProvider:
             raise EmbeddingConfigurationError(
                 "APP_EMBEDDING_BATCH_SIZE must be positive"
             )
+        if timeout_seconds < 1:
+            raise EmbeddingConfigurationError(
+                "APP_LLM_TIMEOUT_SECONDS must be positive"
+            )
         self.model = model
         self.batch_size = batch_size
         if client is None:
@@ -121,6 +127,7 @@ class OpenAIEmbeddingProvider:
 
             self._client = OpenAI(
                 api_key=api_key.get_secret_value(),
+                timeout=timeout_seconds,
                 max_retries=0,
             )
         else:
@@ -178,6 +185,7 @@ def build_embedding_provider(settings: Settings) -> EmbeddingProvider:
             settings.openai_api_key,
             model=settings.embedding_model,
             batch_size=settings.embedding_batch_size,
+            timeout_seconds=settings.llm_timeout_seconds,
         )
     else:
         raise EmbeddingConfigurationError(
@@ -185,3 +193,13 @@ def build_embedding_provider(settings: Settings) -> EmbeddingProvider:
         )
     logger.info("Embedding provider selected: %s", provider.name)
     return provider
+
+
+def build_query_embedder(settings: Settings) -> QueryEmbedder:
+    """Build the retrieval-facing embedder without introducing HTTP concerns."""
+    provider = build_embedding_provider(settings)
+    return QueryEmbedder(
+        name=provider.name,
+        is_production_grade=provider.is_production_grade,
+        embed=provider.embed_query,
+    )

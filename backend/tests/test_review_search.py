@@ -252,6 +252,25 @@ def test_candidate_limit_preserves_headroom_at_maximum_top_k() -> None:
     assert MAX_CANDIDATE_LIMIT == MAX_TOP_K * 2
 
 
+def test_service_candidate_multiplier_preserves_dedup_headroom(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[int] = []
+
+    def candidates(**kwargs: object) -> SearchQueryResult:
+        captured.append(kwargs["candidate_multiplier"])  # type: ignore[arg-type]
+        return SearchQueryResult([], 0, "SELECT parameterized")
+
+    monkeypatch.setattr(review_search, "search_review_candidates", candidates)
+    response = search_reviews(
+        FakeSession(), SearchRequest(query="cancel"), _embedder()
+    )
+
+    assert review_search.CANDIDATE_MULTIPLIER == 2
+    assert captured == [2]
+    assert response.query_trace.candidate_multiplier == 2
+
+
 def test_maximum_top_k_is_satisfied_after_deduplication(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -322,7 +341,7 @@ def test_provider_module_is_only_imported_inside_dependency_function() -> None:
     provider_module = "app.services." + "embedding_service"
 
     assert provider_module not in service_source
-    import_line = "from " + provider_module + " import build_embedding_provider"
+    import_line = "from " + provider_module + " import build_query_embedder"
     assert import_line in deps_source
     assert deps_source.index(import_line) > deps_source.index("def get_query_embedder")
 

@@ -158,6 +158,7 @@ def test_unknown_app_id_is_dropped_with_limitation() -> None:
         settings=_settings(),
     )
     assert result.plan.app_ids == ["app-one"]
+    assert result.dropped_app_ids == ["invented-app"]
     assert any("invented-app" in limitation for limitation in result.limitations)
 
 

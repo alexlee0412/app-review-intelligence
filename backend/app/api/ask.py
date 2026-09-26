@@ -5,8 +5,10 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_query_embedder
 from app.core.db import get_db
 from app.schemas.answer import AnswerResponse
+from app.schemas.search import QueryEmbedder
 from app.services.ask_service import answer_question
 from app.services.llm_provider import (
     LLMConfigurationError,
@@ -33,10 +35,11 @@ class AskRequest(BaseModel):
 def post_ask(
     request: AskRequest,
     session: Session = Depends(get_db),
+    embedder: QueryEmbedder = Depends(get_query_embedder),
 ) -> AnswerResponse:
     """Answer one review question through the canonical ask service."""
     try:
-        return answer_question(session, request.question)
+        return answer_question(session, request.question, embedder=embedder)
     except LLMConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

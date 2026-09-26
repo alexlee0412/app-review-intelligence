@@ -159,14 +159,16 @@ class QueryPlan(BaseModel):
 
         return self
 
-    def restrict_apps_to(self, known_app_ids: set[str]) -> tuple[QueryPlan, list[str]]:
+    def restrict_apps_to(
+        self, known_app_ids: set[str]
+    ) -> tuple[QueryPlan, list[str], list[str]]:
         """Drop app ids absent from the catalog, reporting what was discarded.
 
-        Returns the restricted plan and a limitation message per dropped id, so an
-        invented identifier becomes a visible caveat rather than an empty result.
+        Returns the restricted plan, a limitation message per dropped id, and the
+        dropped identifiers themselves, so execution never depends on prose text.
         """
         if self.app_ids is None:
-            return self, []
+            return self, [], []
         kept = [app_id for app_id in self.app_ids if app_id in known_app_ids]
         dropped = [app_id for app_id in self.app_ids if app_id not in known_app_ids]
         limitations = [
@@ -174,8 +176,8 @@ class QueryPlan(BaseModel):
             for app_id in dropped
         ]
         if kept == self.app_ids:
-            return self, limitations
-        return self.model_copy(update={"app_ids": kept or None}), limitations
+            return self, limitations, dropped
+        return self.model_copy(update={"app_ids": kept or None}), limitations, dropped
 
 
 class PlannerResult(BaseModel):
@@ -185,4 +187,5 @@ class PlannerResult(BaseModel):
     model: str
     used_fallback: bool = False
     limitations: list[str] = Field(default_factory=list)
+    dropped_app_ids: list[str] = Field(default_factory=list)
     usage: dict[str, Any] | None = None

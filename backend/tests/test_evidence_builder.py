@@ -77,7 +77,9 @@ def test_evidence_ids_are_deterministic_and_one_based(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     reviews = [_review(1), _review(2), _review(3)]
-    monkeypatch.setattr(evidence_builder, "search_reviews", lambda *_: _response(reviews))
+    monkeypatch.setattr(
+        evidence_builder, "search_reviews", lambda *_, **__: _response(reviews)
+    )
 
     first = build_evidence(object(), _plan(), embedder=_embedder())  # type: ignore[arg-type]
     second = build_evidence(object(), _plan(), embedder=_embedder())  # type: ignore[arg-type]
@@ -91,7 +93,7 @@ def test_excerpt_is_exact_source_prefix(monkeypatch: pytest.MonkeyPatch) -> None
     body = "  Exact punctuation!\n" + "한" * MAX_EXCERPT_CHARACTERS
     review = _review(1, body=body)
     monkeypatch.setattr(
-        evidence_builder, "search_reviews", lambda *_: _response([review])
+        evidence_builder, "search_reviews", lambda *_, **__: _response([review])
     )
 
     bundle = build_evidence(object(), _plan(), embedder=_embedder())  # type: ignore[arg-type]
@@ -106,7 +108,7 @@ def test_thin_and_nonproduction_evidence_limitations_are_carried(
     monkeypatch.setattr(
         evidence_builder,
         "search_reviews",
-        lambda *_: _response(reviews, production=False),
+        lambda *_, **__: _response(reviews, production=False),
     )
 
     bundle = build_evidence(
@@ -131,7 +133,9 @@ def test_aggregates_are_passed_through_without_recalculation(
         avg_rating=1.75,
         rating_distribution={1: 2, 2: 1},
     )
-    monkeypatch.setattr(evidence_builder, "search_reviews", lambda *_: _response(reviews))
+    monkeypatch.setattr(
+        evidence_builder, "search_reviews", lambda *_, **__: _response(reviews)
+    )
 
     bundle = build_evidence(
         object(),  # type: ignore[arg-type]
@@ -141,6 +145,26 @@ def test_aggregates_are_passed_through_without_recalculation(
     )
 
     assert bundle.aggregates == [aggregate]
+
+
+def test_excerpt_limit_is_pinned_at_500_characters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert MAX_EXCERPT_CHARACTERS == 500
+    reviews = [
+        _review(1, body="a" * MAX_EXCERPT_CHARACTERS),
+        _review(2, body="b" * (MAX_EXCERPT_CHARACTERS + 1)),
+    ]
+    monkeypatch.setattr(
+        evidence_builder, "search_reviews", lambda *_, **__: _response(reviews)
+    )
+
+    bundle = build_evidence(
+        object(), _plan(), embedder=_embedder()  # type: ignore[arg-type]
+    )
+
+    assert bundle.evidence[0].excerpt == "a" * 500
+    assert bundle.evidence[1].excerpt == "b" * 500
 
 
 def test_nonanswering_plan_does_not_call_retrieval(

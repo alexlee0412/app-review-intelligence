@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models import EMBEDDING_DIMENSION, QueryRun
-from app.models.query_run import RUN_KIND_SEARCH
+from app.models.query_run import RUN_KIND_SEARCH, RUN_KINDS
 from app.repositories.review_search_repository import (
     SearchQueryResult,
     search_review_candidates,
@@ -109,11 +109,12 @@ def _persist_query_run(
     query_result: SearchQueryResult,
     evidence: list[ReviewEvidence],
     embedder: QueryEmbedder,
+    run_kind: str,
 ) -> UUID:
     query_run_id = uuid.uuid4()
     query_run = QueryRun(
         query_run_id=query_run_id,
-        run_kind=RUN_KIND_SEARCH,
+        run_kind=run_kind,
         user_query=request.query,
         parsed_intent=None,
         applied_filters=filters.model_dump(mode="json"),
@@ -135,11 +136,15 @@ def search_reviews(
     session: Session,
     request: SearchRequest,
     embedder: QueryEmbedder,
+    *,
+    run_kind: str = RUN_KIND_SEARCH,
 ) -> SearchResponse:
     """Retrieve, deduplicate, trace, and return review evidence.
 
     ``matched_review_count`` is the pre-deduplication total matching all SQL filters.
     """
+    if run_kind not in RUN_KINDS:
+        raise ValueError("run_kind must be 'ask' or 'search'")
     filters = _normalized_filters(request)
     embedding_started = time.perf_counter()
     query_vector = _embed_query(embedder, request.query)
@@ -170,6 +175,7 @@ def search_reviews(
         query_result=query_result,
         evidence=evidence,
         embedder=embedder,
+        run_kind=run_kind,
     )
 
     warnings = []

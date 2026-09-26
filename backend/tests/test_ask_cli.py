@@ -10,6 +10,7 @@ import pytest
 
 from app.schemas.answer import AnswerResponse, AnswerTrace, EvidenceItem, Finding
 from app.schemas.search import AppliedFilters, ReviewEvidence
+from app.services.embedding_service import EmbeddingConfigurationError
 from scripts import ask
 
 
@@ -227,6 +228,25 @@ def test_main_reports_failure_to_stderr(
     # since it can embed a connection string.
     assert captured.err == "fatal: unable to answer question (ValueError)\n"
     assert "bad input" not in captured.err
+
+
+def test_main_identifies_embedding_configuration_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        ask,
+        "run",
+        lambda args: (_ for _ in ()).throw(
+            EmbeddingConfigurationError("embedding provider is not configured")
+        ),
+    )
+    monkeypatch.setattr("sys.argv", ["ask.py", "question"])
+
+    assert ask.main() == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "EmbeddingConfigurationError" in captured.err
+    assert "HTTPException" not in captured.err
 
 
 def test_shell_wrapper_is_thin_relative_and_executable() -> None:

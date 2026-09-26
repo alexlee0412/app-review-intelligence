@@ -6,6 +6,7 @@ import math
 from types import SimpleNamespace
 
 import pytest
+import openai
 from pydantic import SecretStr
 
 from app.core.config import Settings
@@ -69,6 +70,39 @@ def test_builder_selects_openai_and_reports_production_grade() -> None:
 def test_openai_without_key_raises_clear_typed_error() -> None:
     with pytest.raises(EmbeddingConfigurationError, match="APP_OPENAI_API_KEY"):
         build_embedding_provider(settings(embedding_provider="openai"))
+
+
+def test_openai_timeout_must_be_positive() -> None:
+    with pytest.raises(
+        EmbeddingConfigurationError, match="APP_LLM_TIMEOUT_SECONDS"
+    ):
+        OpenAIEmbeddingProvider(
+            SecretStr("placeholder-key"),
+            timeout_seconds=0,
+            client=object(),
+        )
+
+
+def test_openai_client_receives_configured_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def client_factory(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(openai, "OpenAI", client_factory)
+    build_embedding_provider(
+        settings(
+            embedding_provider="openai",
+            openai_api_key=SecretStr("placeholder-key"),
+            llm_timeout_seconds=37,
+        )
+    )
+
+    assert captured["timeout"] == 37
+    assert captured["max_retries"] == 0
 
 
 def test_openai_dimension_mismatch_raises() -> None:
