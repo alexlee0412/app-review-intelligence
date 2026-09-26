@@ -191,6 +191,16 @@ describe("friendly errors and retry", () => {
         }),
     ],
     ["invalid trace", () => Response.json({ ...fullResponse(), trace: null })],
+    [
+      "a finding without evidence ids",
+      () =>
+        Response.json({
+          ...fullResponse(),
+          findings: [
+            { claim: internalDetail, kind: "computed", evidence_ids: [] },
+          ],
+        }),
+    ],
   ])("handles a successful HTTP response with %s", async (_label, response) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response()));
     render(<Home />);

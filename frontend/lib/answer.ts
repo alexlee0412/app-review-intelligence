@@ -28,7 +28,7 @@ export const answerResponseSchema = z.object({
   findings: z.array(
     z.object({
       claim: z.string(),
-      evidence_ids: z.array(evidenceId),
+      evidence_ids: z.array(evidenceId).min(1),
       kind: z.enum(["observed", "computed", "interpretation"]),
     }),
   ),

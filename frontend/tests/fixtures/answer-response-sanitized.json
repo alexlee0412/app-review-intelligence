@@ -1,0 +1,294 @@
+{
+  "query_run_id": "12345678-1234-4234-8234-123456789abc",
+  "question": "What problems are users reporting about Sample Editor?",
+  "answer": "Reviewers describe friction with sample editing controls. [E2][E4][E10]\n\n- Saving and reopening projects can interrupt the workflow. [E1][E8]\n- Another reviewer asks for names on saved frames. [E7]",
+  "findings": [
+    {
+      "claim": "Sample editing controls may interrupt the workflow.",
+      "evidence_ids": ["E3", "E2", "E4", "E5", "E6"],
+      "kind": "interpretation"
+    },
+    {
+      "claim": "Synthetic finding supported by E3.",
+      "evidence_ids": ["E3"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E2.",
+      "evidence_ids": ["E2"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E4.",
+      "evidence_ids": ["E4"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E5.",
+      "evidence_ids": ["E5"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E8 and E1.",
+      "evidence_ids": ["E8", "E1"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E1.",
+      "evidence_ids": ["E1"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E2.",
+      "evidence_ids": ["E2"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E10.",
+      "evidence_ids": ["E10"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E4.",
+      "evidence_ids": ["E4"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E7.",
+      "evidence_ids": ["E7"],
+      "kind": "observed"
+    },
+    {
+      "claim": "Synthetic finding supported by E5 and E9.",
+      "evidence_ids": ["E5", "E9"],
+      "kind": "observed"
+    }
+  ],
+  "metrics": {
+    "totals": {
+      "total_reviews": 10,
+      "total_matched": 10,
+      "apps_with_matches": 1,
+      "overall_avg_rating": 2.2,
+      "rating_distribution": {
+        "1": 5,
+        "2": 2,
+        "3": 1,
+        "4": 0,
+        "5": 2
+      }
+    },
+    "apps": [
+      {
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "review_count": 10,
+        "matched_count": 10,
+        "avg_rating": 2.2,
+        "rating_distribution": {
+          "1": 5,
+          "2": 2,
+          "3": 1,
+          "4": 0,
+          "5": 2
+        },
+        "oldest_review_at": "2026-08-12T18:10:53Z",
+        "newest_review_at": "2026-09-03T02:59:25Z"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "evidence_id": "E1",
+      "review": {
+        "review_id": "synthetic-review-E1",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.3.2",
+        "rating": 2,
+        "country": "US",
+        "created_at": "2026-08-27T02:52:34Z",
+        "title": "Synthetic feedback E1",
+        "body": "The sample workspace loses my selected border when I save an image.",
+        "similarity": 0.417151
+      },
+      "excerpt": "The sample workspace loses my selected border when I save an image."
+    },
+    {
+      "evidence_id": "E2",
+      "review": {
+        "review_id": "synthetic-review-E2",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.3.2",
+        "rating": 1,
+        "country": "US",
+        "created_at": "2026-08-29T17:58:03Z",
+        "title": "Synthetic feedback E2",
+        "body": "The sample toolbar takes a while to respond after I open a project.",
+        "similarity": 0.388284
+      },
+      "excerpt": "The sample toolbar takes a while to respond after I open a project."
+    },
+    {
+      "evidence_id": "E3",
+      "review": {
+        "review_id": "synthetic-review-E3",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.4.0",
+        "rating": 1,
+        "country": "US",
+        "created_at": "2026-09-03T02:59:25Z",
+        "title": "Synthetic feedback E3",
+        "body": "I would like a preview of the border before saving my sample image.",
+        "similarity": 0.306741
+      },
+      "excerpt": "I would like a preview of the border before saving my sample image."
+    },
+    {
+      "evidence_id": "E4",
+      "review": {
+        "review_id": "synthetic-review-E4",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.3.2",
+        "rating": 2,
+        "country": "US",
+        "created_at": "2026-08-29T00:58:24Z",
+        "title": "Synthetic feedback E4",
+        "body": "The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. ",
+        "similarity": 0.287895
+      },
+      "excerpt": "The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame selection is difficult to navigate. The sample frame select"
+    },
+    {
+      "evidence_id": "E5",
+      "review": {
+        "review_id": "synthetic-review-E5",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.3.2",
+        "rating": 3,
+        "country": "US",
+        "created_at": "2026-08-27T20:45:45Z",
+        "title": "Synthetic feedback E5",
+        "body": "The sample crop control is useful, but its reset button is hard to find.",
+        "similarity": 0.285314
+      },
+      "excerpt": "The sample crop control is useful, but its reset button is hard to find."
+    },
+    {
+      "evidence_id": "E6",
+      "review": {
+        "review_id": "synthetic-review-E6",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.4.0",
+        "rating": 1,
+        "country": "US",
+        "created_at": "2026-09-02T01:31:33Z",
+        "title": "Synthetic feedback E6",
+        "body": "The sample color selector closes before I can choose a shade.",
+        "similarity": 0.26941
+      },
+      "excerpt": "The sample color selector closes before I can choose a shade."
+    },
+    {
+      "evidence_id": "E7",
+      "review": {
+        "review_id": "synthetic-review-E7",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.3.1",
+        "rating": 5,
+        "country": "US",
+        "created_at": "2026-08-15T14:32:45Z",
+        "title": "Synthetic feedback E7",
+        "body": "Please add a way to name saved sample frames.\nThat would help me find them again.",
+        "similarity": 0.262692
+      },
+      "excerpt": "Please add a way to name saved sample frames.\nThat would help me find them again."
+    },
+    {
+      "evidence_id": "E8",
+      "review": {
+        "review_id": "synthetic-review-E8",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.3.2",
+        "rating": 1,
+        "country": "US",
+        "created_at": "2026-08-29T17:33:18Z",
+        "title": "Synthetic feedback E8",
+        "body": "The sample workspace takes too long to reopen a saved project.",
+        "similarity": 0.222574
+      },
+      "excerpt": "The sample workspace takes too long to reopen a saved project."
+    },
+    {
+      "evidence_id": "E9",
+      "review": {
+        "review_id": "synthetic-review-E9",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.3.1",
+        "rating": 5,
+        "country": "US",
+        "created_at": "2026-08-12T18:10:53Z",
+        "title": "Synthetic feedback E9",
+        "body": "I enjoy trying different borders in this sample editor.",
+        "similarity": 0.216183
+      },
+      "excerpt": "I enjoy trying different borders in this sample editor."
+    },
+    {
+      "evidence_id": "E10",
+      "review": {
+        "review_id": "synthetic-review-E10",
+        "app_id": "sample-editor",
+        "app_name": "Sample Editor",
+        "version": "7.4.0",
+        "rating": 1,
+        "country": "US",
+        "created_at": "2026-09-01T05:10:03Z",
+        "title": "Synthetic feedback E10",
+        "body": "The sample rotation tool moves the image farther than I expect.",
+        "similarity": 0.087758
+      },
+      "excerpt": "The sample rotation tool moves the image farther than I expect."
+    }
+  ],
+  "limitations": [
+    "A synthetic finding was omitted because its citations did not resolve to the supplied reviews."
+  ],
+  "warnings": [],
+  "trace": {
+    "intent": "review_summary",
+    "applied_filters": {
+      "app_ids": ["sample-editor"],
+      "countries": ["US"],
+      "ratings": null,
+      "date_from": null,
+      "date_to": null,
+      "min_similarity": null
+    },
+    "semantic_query": "sample editing controls, saved frames, previews and workspace responsiveness",
+    "total_candidates": 10,
+    "evidence_count": 10,
+    "aggregates_computed": [
+      "review_count",
+      "matched_count",
+      "avg_rating",
+      "rating_distribution",
+      "date_range"
+    ],
+    "planner_model": "gpt-5-mini",
+    "synthesizer_model": "gpt-5",
+    "llm_provider": "openai",
+    "llm_is_production_grade": true,
+    "embedding_provider": "openai",
+    "embedding_is_production_grade": true,
+    "synthesis_skipped": false
+  }
+}

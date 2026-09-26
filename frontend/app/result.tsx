@@ -85,7 +85,13 @@ export function AnswerResult({ response }: { response: AnswerResponse }) {
               </div>
               <div>
                 <dt>Average rating</dt>
-                <dd>
+                <dd
+                  aria-label={
+                    metrics.totals.overall_avg_rating === null
+                      ? undefined
+                      : `${metrics.totals.overall_avg_rating.toFixed(2)} out of 5 stars`
+                  }
+                >
                   {metrics.totals.overall_avg_rating === null
                     ? "Not available"
                     : `${metrics.totals.overall_avg_rating.toFixed(2)}★`}
@@ -113,7 +119,13 @@ export function AnswerResult({ response }: { response: AnswerResponse }) {
                       </div>
                       <div>
                         <dt>Average rating</dt>
-                        <dd>
+                        <dd
+                          aria-label={
+                            app.avg_rating === null
+                              ? undefined
+                              : `${app.avg_rating.toFixed(2)} out of 5 stars`
+                          }
+                        >
                           {app.avg_rating === null
                             ? "Not available"
                             : `${app.avg_rating.toFixed(2)}★`}

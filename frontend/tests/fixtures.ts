@@ -14,7 +14,7 @@ const syntheticResponse = {
     },
     {
       claim: "The sample dataset contains 23 reviews.",
-      evidence_ids: [],
+      evidence_ids: ["E2"],
       kind: "computed",
     },
     {
@@ -26,9 +26,9 @@ const syntheticResponse = {
   metrics: {
     totals: {
       total_reviews: 23,
-      total_matched: 17,
+      total_matched: 4,
       apps_with_matches: 1,
-      overall_avg_rating: 2.75,
+      overall_avg_rating: 2.9130434782608696,
       rating_distribution: { "1": 7, "2": 0, "3": 8, "4": 4, "5": 4 },
     },
     apps: [
@@ -36,8 +36,8 @@ const syntheticResponse = {
         app_id: "sample-camera",
         app_name: "Sample Camera",
         review_count: 23,
-        matched_count: 17,
-        avg_rating: 2.2857142857142856,
+        matched_count: 4,
+        avg_rating: 2.9130434782608696,
         rating_distribution: { "1": 7, "2": 0, "3": 8, "4": 4, "5": 4 },
         oldest_review_at: "2026-01-01T00:00:00Z",
         newest_review_at: "2026-01-09T00:00:00Z",
@@ -45,7 +45,12 @@ const syntheticResponse = {
     ],
   },
   evidence: [
-    "Export pauses when I select a frame.\nI tried again — same result!  Please keep my edits. 🧩",
+    Array.from(
+      "Export pauses when I select a frame.\nI tried again — same result!  Please keep my edits. 🧩" +
+        " Synthetic export feedback.".repeat(30),
+    )
+      .slice(0, 500)
+      .join(""),
     "A preview before saving would help me choose a border.",
     "The crop control is easy to find. The rotation control feels awkward.",
     "I like the color controls, but the toolbar takes up too much space.",
@@ -60,13 +65,19 @@ const syntheticResponse = {
       country: "US",
       created_at: "2026-01-09T00:00:00Z",
       title: null,
-      body: `${excerpt}\nAdditional body text is deliberately excluded from the excerpt.`,
+      body:
+        index === 0
+          ? `${excerpt}\nAdditional body text is deliberately excluded from the excerpt.`
+          : excerpt,
       version: null,
       similarity: 0.5,
     },
   })),
   limitations: ["These fictional reviews cover only the sample dataset."],
-  warnings: ["Some matching reviews lack version information."],
+  warnings: [
+    "The non-production answer provider ('synthetic-provider') was used; generated language is not production-grade.",
+    "The non-semantic development embedding provider ('synthetic-embedding') was used; retrieval scores and ordering are not meaningful.",
+  ],
   trace: {
     intent: "review_summary",
     applied_filters: {
@@ -81,12 +92,12 @@ const syntheticResponse = {
     total_candidates: 17,
     evidence_count: 4,
     aggregates_computed: ["review_count", "avg_rating"],
-    planner_model: null,
-    synthesizer_model: null,
-    llm_provider: null,
-    llm_is_production_grade: null,
-    embedding_provider: null,
-    embedding_is_production_grade: null,
+    planner_model: "synthetic-planner",
+    synthesizer_model: "synthetic-synthesizer",
+    llm_provider: "synthetic-provider",
+    llm_is_production_grade: false,
+    embedding_provider: "synthetic-embedding",
+    embedding_is_production_grade: false,
     synthesis_skipped: false,
   },
 } satisfies AnswerResponse;

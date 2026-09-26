@@ -27,9 +27,14 @@ describe("grounded result presentation", () => {
     const kinds = ["observed", "computed", "interpretation"];
     expect(rows).toHaveLength(kinds.length);
     const backgrounds = rows.map((row, index) => {
-      expect(within(row).getByText(response.findings[index].claim)).toBeVisible();
+      expect(
+        within(row).getByText(response.findings[index].claim),
+      ).toBeVisible();
       const tag = within(row).getByText(kinds[index], { exact: true });
       expect(tag).toBeVisible();
+      for (const id of response.findings[index].evidence_ids) {
+        expect(within(row).getByText(`[${id}]`, { exact: true })).toBeVisible();
+      }
       return getComputedStyle(tag).backgroundColor;
     });
     expect(new Set(backgrounds).size).toBe(3);
@@ -50,6 +55,10 @@ describe("grounded result presentation", () => {
       expect(panel.getByText(display)).not.toBeVisible();
       fireEvent.click(toggle);
       expect(panel.getByText(display)).toBeVisible();
+      expect(panel.getByText(display)).toHaveAttribute(
+        "aria-label",
+        `${average.toFixed(2)} out of 5 stars`,
+      );
       expect(
         panel.queryByText(`${average}★`, { selector: "dd" }),
       ).not.toBeInTheDocument();
@@ -89,8 +98,12 @@ describe("grounded result presentation", () => {
     );
     const metrics = screen.getByRole("region", { name: "Metrics" });
     expect(within(metrics).getAllByText("23")[0]).toBeVisible();
-    expect(within(metrics).getAllByText("17")[0]).toBeVisible();
-    expect(within(metrics).getAllByText("2.75★")[0]).toBeVisible();
+    expect(within(metrics).getAllByText("4")[0]).toBeVisible();
+    expect(within(metrics).getAllByText("2.91★")[0]).toBeVisible();
+    expect(within(metrics).getAllByText("2.91★")[0]).toHaveAttribute(
+      "aria-label",
+      "2.91 out of 5 stars",
+    );
     expect(
       within(screen.getByRole("region", { name: "Findings" })).getByText(
         "[E1]",
@@ -219,6 +232,11 @@ describe("grounded result presentation", () => {
     expect(
       screen.getAllByText("Not available", { selector: "dd" }),
     ).toHaveLength(2);
+    for (const average of screen.getAllByText("Not available", {
+      selector: "dd",
+    })) {
+      expect(average).not.toHaveAttribute("aria-label");
+    }
     expect(screen.queryByText(/Invalid Date|NaN/)).not.toBeInTheDocument();
   });
 
