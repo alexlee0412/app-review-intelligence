@@ -60,7 +60,10 @@ export function AnswerResult({ response }: { response: AnswerResponse }) {
 
   return (
     <article className={styles.results} aria-label="Review analysis">
-      <section className={styles.section} aria-labelledby="answer-heading">
+      <section
+        className={`${styles.section} ${styles.readingSurface}`}
+        aria-labelledby="answer-heading"
+      >
         <p className={styles.questionAsked}>{response.question}</p>
         <h2 id="answer-heading">Answer</h2>
         <div className={styles.verbatim}>{response.answer}</div>
@@ -160,7 +163,10 @@ export function AnswerResult({ response }: { response: AnswerResponse }) {
           <p>No metrics were provided for this answer.</p>
         )}
       </section>
-      <section className={styles.section} aria-labelledby="findings-heading">
+      <section
+        className={`${styles.section} ${styles.readingSurface}`}
+        aria-labelledby="findings-heading"
+      >
         <h2 id="findings-heading">Findings</h2>
         {response.findings.length ? (
           <ul className={styles.findings}>

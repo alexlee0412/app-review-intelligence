@@ -8,7 +8,19 @@ import { fullResponse } from "./fixtures";
 // Apply the production stylesheet with its module class names in jsdom.
 const stylesheet = document.createElement("style");
 beforeAll(() => {
-  const css = readFileSync("app/page.module.css", "utf8");
+  // jsdom does not resolve custom properties in computed styles. Use the actual
+  // light-theme token values; keep all computed-style assertions unchanged.
+  const theme = readFileSync("app/theme.css", "utf8").split("@media")[0];
+  const tokens = new Map(
+    Array.from(theme.matchAll(/(--[\w-]+):\s*([^;]+);/g), ([, name, value]) => [
+      name,
+      value,
+    ]),
+  );
+  const css = readFileSync("app/page.module.css", "utf8").replace(
+    /var\((--[\w-]+)\)/g,
+    (value, name: string) => tokens.get(name) ?? value,
+  );
   stylesheet.textContent = css.replace(
     /\.([a-zA-Z_][\w-]*)/g,
     (selector, name: string) => (styles[name] ? `.${styles[name]}` : selector),

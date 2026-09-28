@@ -1,0 +1,78 @@
+:root {
+  --color-scheme: light;
+  --ground: #f1f3ef;
+  --ground-wash: #dce9e2;
+  --ground-cool: #e5e9e9;
+  --paper: #ffffff;
+  --inset: #f0f4f1;
+  --ink: #1b2d2d;
+  --muted: #485e61;
+  --placeholder: #536765;
+  --line: #cbd7d1;
+  --control-line: #738d85;
+  --glass: rgb(255 255 255 / 64%);
+  --glass-border: rgb(255 255 255 / 92%);
+  --glass-fallback: #f7faf7;
+  --accent: #155e52;
+  --accent-hover: #104c43;
+  --on-accent: #ffffff;
+  --focus: #126e5c;
+  --disabled-bg: #dce5df;
+  --disabled-ink: #4c5e56;
+  --chip-bg: #eef2ef;
+  --chip-ink: #384f4a;
+  --observed-bg: #edf2f1;
+  --observed-ink: #36534b;
+  --computed-bg: #dbeee5;
+  --computed-ink: #174e40;
+  --interpretation-bg: #f5f7f4;
+  --interpretation-ink: #43534c;
+  --notice-bg: #fff1d5;
+  --notice-ink: #614411;
+  --notice-border: #ad7a22;
+  --shadow-low:
+    0 8px 28px rgb(27 49 40 / 5%), inset 0 1px 0 rgb(255 255 255 / 80%);
+  --shadow-high:
+    0 18px 60px rgb(27 49 40 / 9%), inset 0 1px 0 rgb(255 255 255 / 90%);
+  color-scheme: var(--color-scheme);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-scheme: dark;
+    --ground: #101a1c;
+    --ground-wash: #203b35;
+    --ground-cool: #243136;
+    --paper: #192629;
+    --inset: #223336;
+    --ink: #e8eeeb;
+    --muted: #b3c6c2;
+    --placeholder: #a8bdb7;
+    --line: #3b5250;
+    --control-line: #7c9a91;
+    --glass: rgb(35 54 54 / 72%);
+    --glass-border: rgb(174 209 192 / 23%);
+    --glass-fallback: #243536;
+    --accent: #9dd9c5;
+    --accent-hover: #b8e6d7;
+    --on-accent: #102b24;
+    --focus: #a4e3cf;
+    --disabled-bg: #304640;
+    --disabled-ink: #b3c6c2;
+    --chip-bg: #2a3b3a;
+    --chip-ink: #c6d9d2;
+    --observed-bg: #2b3f3a;
+    --observed-ink: #c2d8ce;
+    --computed-bg: #284d40;
+    --computed-ink: #c2ecda;
+    --interpretation-bg: #283230;
+    --interpretation-ink: #cdd8ce;
+    --notice-bg: #392e1c;
+    --notice-ink: #ffe2ae;
+    --notice-border: #c69b50;
+    --shadow-low:
+      0 8px 28px rgb(0 0 0 / 14%), inset 0 1px 0 rgb(224 242 232 / 5%);
+    --shadow-high:
+      0 18px 60px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(224 242 232 / 8%);
+  }
+}
