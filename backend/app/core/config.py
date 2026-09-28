@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_embedding_and_production_posture(self) -> "Settings":
         """Reject incompatible embedding settings and unsafe production defaults."""
+        if (
+            isinstance(self.synthesizer_reasoning_effort, str)
+            and not self.synthesizer_reasoning_effort.strip()
+        ):
+            self.synthesizer_reasoning_effort = None
+
         if self.embedding_dimension != _EXPECTED_EMBEDDING_DIMENSION:
             raise ValueError(
                 "APP_EMBEDDING_DIMENSION must be 1536 to match the database vector column"

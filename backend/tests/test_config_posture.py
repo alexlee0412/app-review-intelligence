@@ -112,6 +112,55 @@ def test_invalid_synthesizer_reasoning_effort_is_rejected() -> None:
         )
 
 
+def test_unset_synthesizer_reasoning_effort_defaults_to_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("APP_SYNTHESIZER_REASONING_EFFORT", raising=False)
+
+    settings = Settings(
+        _env_file=None, database_url=REMOTE_DATABASE_URL, **BASE_SETTINGS
+    )
+
+    assert settings.synthesizer_reasoning_effort is None
+
+
+@pytest.mark.parametrize("value", ["", "  \t  "])
+def test_blank_synthesizer_reasoning_effort_normalizes_to_none(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("APP_SYNTHESIZER_REASONING_EFFORT", value)
+
+    settings = Settings(
+        _env_file=None, database_url=REMOTE_DATABASE_URL, **BASE_SETTINGS
+    )
+
+    assert settings.synthesizer_reasoning_effort is None
+
+
+@pytest.mark.parametrize("value", ["low", "medium", "high"])
+def test_valid_synthesizer_reasoning_effort_is_preserved(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("APP_SYNTHESIZER_REASONING_EFFORT", value)
+
+    settings = Settings(
+        _env_file=None, database_url=REMOTE_DATABASE_URL, **BASE_SETTINGS
+    )
+
+    assert settings.synthesizer_reasoning_effort == value
+
+
+def test_invalid_nonempty_synthesizer_reasoning_effort_is_still_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_SYNTHESIZER_REASONING_EFFORT", "turbo")
+
+    with pytest.raises(
+        ValidationError, match="APP_SYNTHESIZER_REASONING_EFFORT.*low.*medium.*high"
+    ):
+        Settings(_env_file=None, database_url=REMOTE_DATABASE_URL, **BASE_SETTINGS)
+
+
 def test_production_openai_requires_key_without_leaking_inputs() -> None:
     password = "private-password-placeholder"
     token = "private-token-placeholder"

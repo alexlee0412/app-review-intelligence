@@ -109,6 +109,32 @@ def _strings(value: Any) -> list[str]:
     return []
 
 
+def _identity_aggregates() -> list[AppAggregate]:
+    return [
+        AppAggregate(
+            app_id="1577705074",
+            app_name="B612",
+            review_count=10,
+            matched_count=4,
+            avg_rating=4.2,
+        ),
+        AppAggregate(
+            app_id="app-two",
+            app_name="Second App",
+            review_count=20,
+            matched_count=5,
+            avg_rating=2.1,
+        ),
+        AppAggregate(
+            app_id="app-three",
+            app_name="Third App",
+            review_count=30,
+            matched_count=6,
+            avg_rating=3.3,
+        ),
+    ]
+
+
 def test_count_formatting_handles_inflection_and_large_values() -> None:
     assert format_count(1, singular="review") == "1 review"
     assert format_count(10, singular="review") == "10 reviews"
@@ -176,6 +202,8 @@ def test_payload_keeps_full_precision_raw_values_alongside_display_values() -> N
     assert payload["formatted"]["aggregates"][0]["avg_rating"] == "2.29"
     assert set(payload["formatted"]["totals"]) == set(payload["totals"])
     assert set(payload["formatted"]["aggregates"][0]) == {
+        "app_id",
+        "app_name",
         "review_count",
         "matched_count",
         "avg_rating",
@@ -204,6 +232,91 @@ def test_every_emitted_display_string_survives_computed_validation() -> None:
 
     assert len(validated.findings) == len(displays)
     assert limitations == []
+
+
+def test_formatted_aggregates_bind_identity_to_distinct_figures() -> None:
+    aggregates = _identity_aggregates()[:2]
+    formatted = format_bundle_metrics({}, aggregates)["aggregates"]
+
+    assert formatted == [
+        {
+            "app_id": "1577705074",
+            "app_name": "B612",
+            "review_count": "10 reviews",
+            "matched_count": "4 matching reviews",
+            "avg_rating": "4.20",
+            "rating_distribution": {},
+            "oldest_review_at": UNAVAILABLE,
+            "newest_review_at": UNAVAILABLE,
+        },
+        {
+            "app_id": "app-two",
+            "app_name": "Second App",
+            "review_count": "20 reviews",
+            "matched_count": "5 matching reviews",
+            "avg_rating": "2.10",
+            "rating_distribution": {},
+            "oldest_review_at": UNAVAILABLE,
+            "newest_review_at": UNAVAILABLE,
+        },
+    ]
+
+
+def test_reordering_aggregates_preserves_identity_figure_binding() -> None:
+    aggregates = _identity_aggregates()[:2]
+    original = format_bundle_metrics({}, aggregates)["aggregates"]
+    reordered = format_bundle_metrics({}, list(reversed(aggregates)))["aggregates"]
+
+    original_by_id = {item["app_id"]: item for item in original}
+    reordered_by_id = {item["app_id"]: item for item in reordered}
+    assert reordered_by_id == original_by_id
+    assert [item["app_id"] for item in reordered] == ["app-two", "1577705074"]
+
+
+def test_every_formatted_identity_matches_raw_aggregate() -> None:
+    aggregates = _identity_aggregates()
+    raw = [aggregate.model_dump(mode="json") for aggregate in aggregates]
+    formatted = format_bundle_metrics({}, aggregates)["aggregates"]
+
+    assert len(formatted) == 3
+    for raw_entry, formatted_entry in zip(raw, formatted, strict=True):
+        assert formatted_entry["app_id"] == raw_entry["app_id"]
+        assert formatted_entry["app_name"] == raw_entry["app_name"]
+
+
+def test_digit_bearing_formatted_identity_does_not_drop_supported_figure() -> None:
+    bundle = _bundle().model_copy(
+        update={"aggregates": _identity_aggregates()[:2]}
+    )
+    formatted = format_bundle_metrics({}, bundle.aggregates)["aggregates"][0]
+    output = SynthesisOutput(
+        answer="The validated finding reports the computed average.",
+        findings=[
+            Finding(
+                claim=(
+                    f"{formatted['app_name']} has an average rating of "
+                    f"{formatted['avg_rating']}."
+                ),
+                evidence_ids=["E1"],
+                kind="computed",
+            )
+        ],
+    )
+
+    validated, limitations, _ = _validate_findings(output, bundle)
+
+    assert validated.findings == output.findings
+    assert limitations == []
+
+
+def test_single_app_formatted_metrics_keep_existing_values() -> None:
+    aggregate = _identity_aggregates()[0]
+    formatted = format_bundle_metrics({}, [aggregate])["aggregates"]
+
+    assert len(formatted) == 1
+    assert formatted[0]["review_count"] == "10 reviews"
+    assert formatted[0]["matched_count"] == "4 matching reviews"
+    assert formatted[0]["avg_rating"] == "4.20"
 
 
 def test_prompt_requires_verbatim_display_values_without_derivation() -> None:

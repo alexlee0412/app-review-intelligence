@@ -115,6 +115,8 @@ def format_bundle_metrics(
 
     formatted_aggregates = [
         {
+            "app_id": aggregate.app_id,
+            "app_name": aggregate.app_name,
             "review_count": format_count(
                 aggregate.review_count, singular="review"
             ),
