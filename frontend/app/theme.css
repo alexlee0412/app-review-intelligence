@@ -1,78 +1,205 @@
+/*
+ * Token layer for App Review Intelligence.
+ *
+ * Three surface roles carry the product's meaning and must not be blurred together:
+ *   chrome  translucent, for the question controls and disclosures only
+ *   paper   fully opaque, for written and quoted text
+ *   rail    recessed, for deterministic figures
+ *
+ * One colour law: the accent marks what the system computed or can resolve —
+ * figures, citations, SQL-derived findings. Prose, quotes and model inference
+ * stay in neutral ink. Amber is reserved for limits on the answer.
+ */
 :root {
   --color-scheme: light;
-  --ground: #f1f3ef;
-  --ground-wash: #dce9e2;
-  --ground-cool: #e5e9e9;
+
+  /* Surfaces */
+  --ground: #eceeed;
+  --ground-wash: #e2eae6;
   --paper: #ffffff;
-  --inset: #f0f4f1;
-  --ink: #1b2d2d;
-  --muted: #485e61;
-  --placeholder: #536765;
-  --line: #cbd7d1;
-  --control-line: #738d85;
-  --glass: rgb(255 255 255 / 64%);
-  --glass-border: rgb(255 255 255 / 92%);
-  --glass-fallback: #f7faf7;
-  --accent: #155e52;
-  --accent-hover: #104c43;
+  --rail: #f3f5f4;
+  --sunken: #e9edeb;
+
+  /* Ink */
+  --ink: #17211f;
+  --muted: #566663;
   --on-accent: #ffffff;
-  --focus: #126e5c;
-  --disabled-bg: #dce5df;
-  --disabled-ink: #4c5e56;
-  --chip-bg: #eef2ef;
-  --chip-ink: #384f4a;
-  --observed-bg: #edf2f1;
-  --observed-ink: #36534b;
-  --computed-bg: #dbeee5;
-  --computed-ink: #174e40;
-  --interpretation-bg: #f5f7f4;
-  --interpretation-ink: #43534c;
-  --notice-bg: #fff1d5;
-  --notice-ink: #614411;
-  --notice-border: #ad7a22;
-  --shadow-low:
-    0 8px 28px rgb(27 49 40 / 5%), inset 0 1px 0 rgb(255 255 255 / 80%);
-  --shadow-high:
-    0 18px 60px rgb(27 49 40 / 9%), inset 0 1px 0 rgb(255 255 255 / 90%);
+
+  /* Structure */
+  --rule: #dee4e1;
+  --rule-strong: #c6cfcb;
+  --control-rule: #9fada9;
+
+  /* Accent — deterministic content only */
+  --accent: #0e5c50;
+  --accent-hover: #0a4a40;
+  --accent-soft: #e0efe8;
+  --accent-edge: #a9cfc1;
+  --focus: #0e7a68;
+
+  /* Finding provenance: distinct weights for how a claim was reached */
+  --observed-bg: #eef1f0;
+  --observed-ink: #2f403c;
+  --observed-edge: #cdd6d3;
+  --computed-bg: #e0efe8;
+  --computed-ink: #0e5c50;
+  --computed-edge: #a9cfc1;
+  --interpretation-bg: transparent;
+  --interpretation-ink: #4c5b58;
+  --interpretation-edge: #b4bfbb;
+
+  /* Limits on the answer */
+  --notice-bg: #fdf4de;
+  --notice-ink: #5a4110;
+  --notice-rule: #c39c37;
+  --notice-mark: #9a7519;
+
+  /* Controls */
+  --disabled-bg: #e4e9e7;
+  --disabled-ink: #59645f;
+
+  /* Material — the only translucent surface in the product */
+  --chrome-tint: rgb(255 255 255 / 62%);
+  --chrome-blur: 20px;
+  --chrome-saturate: 180%;
+  --chrome-specular: rgb(255 255 255 / 85%);
+  --chrome-inner: rgb(255 255 255 / 30%);
+  --chrome-rim: rgb(22 40 35 / 7%);
+  --chrome-solid: #f6f8f7;
+
+  /* Depth — a contact shadow plus an ambient one, never a single sticker drop */
+  --shadow-chrome:
+    0 1px 2px rgb(20 40 35 / 5%), 0 14px 34px -14px rgb(20 40 35 / 16%);
+  --shadow-sheet:
+    0 1px 1px rgb(20 40 35 / 4%), 0 26px 60px -30px rgb(20 40 35 / 18%);
+  --shadow-card: 0 1px 2px rgb(20 40 35 / 5%);
+
+  /* Type */
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", system-ui, sans-serif;
+  --text-display: clamp(2rem, 1.35rem + 2.2vw, 2.75rem);
+  --text-lede: 1.0625rem;
+  --text-answer: clamp(1.0625rem, 1rem + 0.35vw, 1.1875rem);
+  --text-body: 0.9375rem;
+  --text-label: 0.9375rem;
+  --text-meta: 0.8125rem;
+  --figure-lead: clamp(1.75rem, 1.4rem + 1.1vw, 2.25rem);
+  --figure: 1.5rem;
+
+  /* Tracking tightens as type grows; leading loosens as type shrinks. */
+  --tracking-display: -0.022em;
+  --tracking-title: -0.014em;
+  --tracking-body: -0.003em;
+  --tracking-meta: 0.01em;
+  --leading-display: 1.07;
+  --leading-title: 1.25;
+  --leading-read: 1.62;
+  --leading-body: 1.55;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Measure */
+  --measure-read: 62ch;
+  --measure-quote: 74ch;
+
+  /* Grid */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.75rem;
+  --space-8: 3.5rem;
+  --rail-width: 19.5rem;
+
+  --radius-sm: 7px;
+  --radius-md: 11px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-settle: cubic-bezier(0.34, 1.22, 0.64, 1);
+  --dur-1: 140ms;
+  --dur-2: 220ms;
+  --dur-3: 320ms;
+
   color-scheme: var(--color-scheme);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --color-scheme: dark;
-    --ground: #101a1c;
-    --ground-wash: #203b35;
-    --ground-cool: #243136;
-    --paper: #192629;
-    --inset: #223336;
-    --ink: #e8eeeb;
-    --muted: #b3c6c2;
-    --placeholder: #a8bdb7;
-    --line: #3b5250;
-    --control-line: #7c9a91;
-    --glass: rgb(35 54 54 / 72%);
-    --glass-border: rgb(174 209 192 / 23%);
-    --glass-fallback: #243536;
-    --accent: #9dd9c5;
-    --accent-hover: #b8e6d7;
-    --on-accent: #102b24;
-    --focus: #a4e3cf;
-    --disabled-bg: #304640;
-    --disabled-ink: #b3c6c2;
-    --chip-bg: #2a3b3a;
-    --chip-ink: #c6d9d2;
-    --observed-bg: #2b3f3a;
-    --observed-ink: #c2d8ce;
-    --computed-bg: #284d40;
-    --computed-ink: #c2ecda;
-    --interpretation-bg: #283230;
-    --interpretation-ink: #cdd8ce;
-    --notice-bg: #392e1c;
-    --notice-ink: #ffe2ae;
-    --notice-border: #c69b50;
-    --shadow-low:
-      0 8px 28px rgb(0 0 0 / 14%), inset 0 1px 0 rgb(224 242 232 / 5%);
-    --shadow-high:
-      0 18px 60px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(224 242 232 / 8%);
+
+    --ground: #0b1012;
+    --ground-wash: #13201f;
+    --paper: #171e20;
+    --rail: #121919;
+    --sunken: #101718;
+
+    --ink: #e7edeb;
+    --muted: #a2b3af;
+    --on-accent: #08221c;
+
+    --rule: #293336;
+    --rule-strong: #3a474a;
+    --control-rule: #708581;
+
+    --accent: #79d0b8;
+    --accent-hover: #96dec9;
+    --accent-soft: #17322c;
+    --accent-edge: #2f5a4e;
+    --focus: #8fdcc6;
+
+    --observed-bg: #222c2e;
+    --observed-ink: #c3d2ce;
+    --observed-edge: #354245;
+    --computed-bg: #17322c;
+    --computed-ink: #79d0b8;
+    --computed-edge: #2f5a4e;
+    --interpretation-ink: #9caba7;
+    --interpretation-edge: #46534f;
+
+    --notice-bg: #33280f;
+    --notice-ink: #f6dfaf;
+    --notice-rule: #a9812f;
+    --notice-mark: #d7ab52;
+
+    --disabled-bg: #222c2e;
+    --disabled-ink: #97a5a1;
+
+    --chrome-tint: rgb(31 42 44 / 66%);
+    --chrome-specular: rgb(214 236 228 / 12%);
+    --chrome-inner: rgb(214 236 228 / 5%);
+    --chrome-rim: rgb(0 0 0 / 45%);
+    --chrome-solid: #1b2426;
+
+    --shadow-chrome:
+      0 1px 2px rgb(0 0 0 / 34%), 0 14px 34px -14px rgb(0 0 0 / 60%);
+    --shadow-sheet:
+      0 1px 1px rgb(0 0 0 / 28%), 0 26px 60px -30px rgb(0 0 0 / 70%);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 30%);
+  }
+}
+
+/* The material collapses to a solid surface when the reader asks for it. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --chrome-tint: var(--chrome-solid);
+    --chrome-blur: 0px;
+    --chrome-saturate: 100%;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --rule: var(--control-rule);
+    --rule-strong: var(--control-rule);
+    --muted: var(--ink);
+    --chrome-tint: var(--chrome-solid);
   }
 }

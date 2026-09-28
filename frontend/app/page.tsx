@@ -14,6 +14,7 @@ const examples = [
 
 export default function Home() {
   const [question, setQuestion] = useState("");
+  const [asked, setAsked] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
@@ -24,6 +25,7 @@ export default function Home() {
     event.preventDefault();
     if (inFlight.current || !question.trim()) return;
     inFlight.current = true;
+    setAsked(question.trim());
     setLoading(true);
     setError(null);
     setAnswer(null);
@@ -40,10 +42,10 @@ export default function Home() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <p className={styles.eyebrow}>REVIEWS, WITH EVIDENCE</p>
         <h1>App Review Intelligence</h1>
         <p className={styles.subtitle}>
-          Ask what users are saying across app reviews.
+          Ask what users are saying. Every figure is computed from the reviews,
+          and every claim cites the ones it rests on.
         </p>
       </header>
       <section className={styles.askPanel} aria-label="Ask about reviews">
@@ -91,11 +93,13 @@ export default function Home() {
       <div role="status" aria-live="polite" aria-atomic="true">
         {loading && (
           <div className={styles.loading}>
-            <span className={styles.spinner} aria-hidden="true" />
-            <div>
-              <strong>Analyzing app reviews…</strong>
-              <p>This can take a little while. Your answer will appear here.</p>
-            </div>
+            <strong>Analyzing app reviews…</strong>
+            <p className={styles.loadingQuestion}>{asked}</p>
+            <p>
+              Reviews are being counted, matching passages retrieved, and the
+              answer checked against them. This can take a little while.
+            </p>
+            <div className={styles.progress} aria-hidden="true" />
           </div>
         )}
         {answer && (
@@ -113,8 +117,8 @@ export default function Home() {
       {answer && <AnswerResult key={answer.query_run_id} response={answer} />}
       {!answer && !loading && !error && (
         <p className={styles.empty}>
-          Start with a question. Explore the answer, its metrics, and the
-          reviews behind it.
+          Ask a question to see the answer, the figures behind it, and the
+          reviews each claim cites.
         </p>
       )}
     </main>

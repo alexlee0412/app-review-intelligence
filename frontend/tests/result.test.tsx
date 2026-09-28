@@ -141,7 +141,7 @@ describe("grounded result presentation", () => {
   it("renders string-key rating buckets in ascending order including zero", () => {
     render(<AnswerResult response={fullResponse()} />);
     const table = screen.getByRole("table", {
-      name: "Rating distribution · reviews",
+      name: "Rating distribution across all reviews",
     });
     expect(
       within(table)
@@ -256,7 +256,102 @@ describe("grounded result presentation", () => {
     const response = fullResponse();
     response.answer = '<script>alert("sample")</script> [E1]';
     render(<AnswerResult response={response} />);
-    expect(screen.getByText(response.answer)).toBeVisible();
+    const answer = within(
+      screen.getByRole("region", { name: "Answer" }),
+    ).getByText(/alert/);
+    expect(answer).toBeVisible();
+    expect(answer.textContent).toBe(response.answer);
     expect(document.querySelector("script")).toBeNull();
+  });
+
+  it("turns a resolvable citation into a control and leaves the rest as text", () => {
+    const response = fullResponse();
+    response.answer = "Supported. [E1] Unsupported. [E9]";
+    render(<AnswerResult response={response} />);
+    const answer = within(screen.getByRole("region", { name: "Answer" }));
+    expect(answer.getByText(/Supported/).textContent).toBe(response.answer);
+    expect(
+      answer.getByRole("button", { name: "Show the review cited as E1" }),
+    ).toBeVisible();
+    expect(
+      answer.queryByRole("button", { name: /cited as E9/ }),
+    ).not.toBeInTheDocument();
+    expect(answer.getByText(/\[E9\]/)).toBeVisible();
+  });
+
+  it("reveals and marks the cited review when a collapsed citation is used", () => {
+    render(<AnswerResult response={fullResponse()} />);
+    expect(
+      screen.queryByRole("article", { name: "Evidence E4" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Answer" })).getByRole(
+        "button",
+        { name: "Show the review cited as E4" },
+      ),
+    );
+    const card = screen.getByRole("article", { name: "Evidence E4" });
+    expect(card).toHaveAttribute("aria-current", "true");
+    expect(card).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "Show less evidence" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("article", { name: "Evidence E1" }),
+    ).not.toHaveAttribute("aria-current");
+  });
+
+  it("drops a selection that collapsing would hide", () => {
+    render(<AnswerResult response={fullResponse()} />);
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Findings" })).getByRole(
+        "button",
+        { name: "Show the review cited as E4" },
+      ),
+    );
+    expect(screen.getByRole("article", { name: "Evidence E4" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show less evidence" }));
+    expect(
+      screen.queryByRole("article", { name: "Evidence E4" }),
+    ).not.toBeInTheDocument();
+    for (const citation of screen.getAllByRole("button", {
+      name: /cited as E/,
+    })) {
+      expect(citation).not.toHaveAttribute("aria-current");
+    }
+  });
+
+  it("points to the limitations without restating or replacing them", () => {
+    const response = fullResponse();
+    render(<AnswerResult response={response} />);
+    const answer = within(screen.getByRole("region", { name: "Answer" }));
+    expect(
+      answer.getByText("1 limitation and 2 warnings apply to this answer."),
+    ).toBeVisible();
+    expect(answer.getByRole("link", { name: "Read them" })).toHaveAttribute(
+      "href",
+      "#limitations",
+    );
+    expect(answer.queryByText(response.limitations[0])).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Limitations" })).getByText(
+        response.limitations[0],
+      ),
+    ).toBeVisible();
+  });
+
+  it("omits the limitation pointer when the answer carries no caveats", () => {
+    render(
+      <AnswerResult
+        response={{ ...fullResponse(), limitations: [], warnings: [] }}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /Read/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Limitations" }),
+    ).not.toBeInTheDocument();
   });
 });
